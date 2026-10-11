@@ -92,12 +92,15 @@ export function StadiumMap({
   sections,
   selected,
   onSelect,
+  split,
   label,
 }: {
   map: VenueMap;
   sections: Record<string, SectionInfo>;
   selected: string | null;
   onSelect: (section: string | null) => void;
+  /** Draws the line between the two halves, when the bowl is shared by two sides. */
+  split?: boolean;
   label: string;
 }) {
   const wedges = map.rings.flatMap((ring, ringIndex) =>
@@ -119,6 +122,17 @@ export function StadiumMap({
       viewBox={`0 0 ${W} ${H}`}
       className="h-auto w-full"
     >
+      {split && (
+        <line
+          x1={CX}
+          x2={CX}
+          y1={8}
+          y2={H - 8}
+          strokeWidth={1.5}
+          strokeDasharray="6 6"
+          className="stroke-line-strong"
+        />
+      )}
       <Field kind={map.field} />
       {wedges.map((item) =>
         item.info ? null : (

@@ -96,6 +96,9 @@ async function SeatPageContent({
               {event.title}, {side.name}. {formatDate(event.date)} at{" "}
               {event.venue}.
             </p>
+            <p className="max-w-xl text-sm leading-normal text-fg-2">
+              {`This seat is on the ${side.name}, so it goes to a fan of the ${side.name.replace(/ side$/, "")} team that makes the final. Seats on the other half follow a different race.`}
+            </p>
           </div>
         </header>
         {teams.length === 0 ? (

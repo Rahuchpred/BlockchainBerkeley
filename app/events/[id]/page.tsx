@@ -94,6 +94,8 @@ async function EventPageContent({
         )}
         <p className="max-w-xl text-sm leading-normal text-fg-2">
           Nobody knows the finalists yet, so each seat has one ticket per team.
+          {sides.length > 1 &&
+            ` The stadium is split in half: the ${sides[0].name} and the ${sides[1].name} each send one team to the final, so each half has its own teams and its own odds.`}
           {from === null
             ? " The finalists are decided, so the tickets for them are now real seats."
             : ` Tickets start at ${formatAmount(from)}.`}
