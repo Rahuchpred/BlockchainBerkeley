@@ -17,6 +17,7 @@ import { viewTicket } from "@/lib/fairseat/live";
 import { qrShape } from "@/lib/fairseat/qr";
 import { readWallet } from "@/lib/fairseat/wallet";
 import { listTickets } from "@/lib/fairseat/xrpl";
+import { LiveRefresh } from "../_components/live";
 import { PageSkeleton } from "../_components/page-skeleton";
 import { TicketWallet, type WalletTicket } from "../_components/ticket-wallet";
 import { WalletChip } from "../_components/wallet-chip";
@@ -85,6 +86,7 @@ async function Wallet() {
 export default function TicketsPage() {
   return (
     <>
+      <LiveRefresh />
       <Suspense fallback={<PageSkeleton />}>
         <Wallet />
       </Suspense>

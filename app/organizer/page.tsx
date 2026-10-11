@@ -19,6 +19,7 @@ import {
   organizerCredential,
   txUrl,
 } from "@/lib/fairseat/xrpl";
+import { LiveRefresh, LiveValue } from "../_components/live";
 import { PageSkeleton } from "../_components/page-skeleton";
 import { Stat } from "../_components/stat";
 import { TeamMark } from "../_components/team-mark";
@@ -65,8 +66,8 @@ function MoneyBar({
               className={`size-2 shrink-0 rounded-full ${part.fill}`}
             />
             <span className="text-fg-2">{part.label}</span>
-            <span className="font-mono tabular-nums">
-              {formatAmount(part.amount)}
+            <span className="tabular-nums">
+              <LiveValue value={part.amount} />
             </span>
           </li>
         ))}
@@ -171,18 +172,18 @@ async function Dashboard() {
       </header>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Stat label="Tickets sold" value={String(sold.length)} />
-        <Stat label="Held in escrow" value={formatAmount(held)} />
-        <Stat label="Released to you" value={formatAmount(paidOut)} />
-        <Stat label="From resales" value={formatAmount(resale)} />
+        <Stat label="Tickets sold" value={sold.length} kind="count" />
+        <Stat label="Held in escrow" value={held} />
+        <Stat label="Released to you" value={paidOut} />
+        <Stat label="From resales" value={resale} />
       </div>
 
       <section className="flex flex-col gap-4 rounded-panel bg-surface p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold">Where the money is</h2>
           <div className="flex flex-wrap items-center gap-3">
-            <p className="font-mono text-sm text-fg-2">
-              {shortAddress(account)} holds{" "}
+            <p className="text-sm text-fg-2">
+              <span className="font-mono">{shortAddress(account)}</span> holds{" "}
               {Number.isFinite(balance)
                 ? formatAmount(balance)
                 : "an unknown amount"}
@@ -235,7 +236,7 @@ async function Dashboard() {
                   <div className="flex flex-col gap-2">
                     <div className="flex justify-between gap-3 text-sm">
                       <span className="text-fg-2">Tickets sold</span>
-                      <span className="font-mono tabular-nums">{`${row.tickets} of ${row.capacity}`}</span>
+                      <span className="tabular-nums">{`${row.tickets} of ${row.capacity}`}</span>
                     </div>
                     <Progress
                       value={row.tickets}
@@ -247,13 +248,13 @@ async function Dashboard() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="flex flex-col gap-1">
                       <span className="text-sm text-fg-2">In escrow</span>
-                      <span className="font-mono text-base font-medium tabular-nums">
+                      <span className="text-base font-medium tabular-nums">
                         {formatAmount(row.held)}
                       </span>
                     </div>
                     <div className="flex flex-col gap-1">
                       <span className="text-sm text-fg-2">Released</span>
-                      <span className="font-mono text-base font-medium tabular-nums">
+                      <span className="text-base font-medium tabular-nums">
                         {formatAmount(row.released)}
                       </span>
                     </div>
@@ -281,7 +282,7 @@ async function Dashboard() {
                               }
                             />
                           </span>
-                          <span className="w-4 text-end font-mono text-sm tabular-nums">
+                          <span className="w-4 text-end text-sm tabular-nums">
                             {team.n}
                           </span>
                         </li>
@@ -317,8 +318,11 @@ async function Dashboard() {
 
 export default function OrganizerPage() {
   return (
-    <Suspense fallback={<PageSkeleton />}>
-      <Dashboard />
-    </Suspense>
+    <>
+      <LiveRefresh every={30_000} />
+      <Suspense fallback={<PageSkeleton />}>
+        <Dashboard />
+      </Suspense>
+    </>
   );
 }

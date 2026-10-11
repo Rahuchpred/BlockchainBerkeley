@@ -79,7 +79,7 @@ function Money({
   return (
     <div className="flex justify-between gap-3">
       <dt className="text-fg-2">{label}</dt>
-      <dd className={cn("font-mono tabular-nums", className)}>{value}</dd>
+      <dd className={cn("tabular-nums", className)}>{value}</dd>
     </div>
   );
 }
@@ -179,7 +179,7 @@ export function TicketPass({
               ].map(([label, value]) => (
                 <div key={label} className="flex flex-col gap-1">
                   <dt className="text-sm text-fg-2">{label}</dt>
-                  <dd className="font-mono text-3xl font-semibold tracking-tight tabular-nums">
+                  <dd className="text-3xl font-semibold tracking-tight tabular-nums">
                     {value}
                   </dd>
                 </div>
@@ -214,7 +214,7 @@ export function TicketPass({
                     <dt className="text-sm text-fg-2">{label}</dt>
                     <dd
                       className={cn(
-                        "font-mono text-base font-medium tabular-nums",
+                        "text-base font-medium tabular-nums",
                         valueTone,
                       )}
                     >

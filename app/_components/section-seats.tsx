@@ -59,7 +59,7 @@ export function SectionSeats({
           const row = rowIndex + 1;
           return (
             <div key={row} className="flex items-center gap-1">
-              <span className="w-5 shrink-0 font-mono text-xs text-fg-3">
+              <span className="w-5 shrink-0 text-xs text-fg-3 tabular-nums">
                 {row}
               </span>
               {Array.from({ length: SECTION.seats }, (_, seatIndex) => {

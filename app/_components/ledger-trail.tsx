@@ -43,9 +43,7 @@ export function LedgerTrail({ steps }: { steps: Activity[] }) {
                     variant="link"
                     size="sm"
                     nativeButton={false}
-                    render={
-                      <Link href={txUrl(step.hash)} />
-                    }
+                    render={<Link href={txUrl(step.hash)} />}
                   >
                     Proof
                   </Button>

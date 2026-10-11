@@ -21,7 +21,7 @@
    - One declaration per line: --name: value; followed by a comment of the form job | used by.
    - A line that starts with == opens a token group. Keep both formats when you retune.
 
-   Font: Hanken Grotesk, SIL OFL, loaded by next/font in app/layout.tsx in place of the stylesheet import.
+   Font: Inter, SIL OFL, loaded by next/font in app/layout.tsx in place of the stylesheet import.
 
    Retuned for Fairseat by scripts/retune-lime.py: the accent is blue (the creator-ops brand ramp,
    #356ed8) in place of the acid lime, with white text on it in the light theme. Comments below that
@@ -128,7 +128,7 @@
   --glow-success-to-press: #157038; /* bottom while pressed | glow-success */
 
   /* == Type == */
-  --font-sans: var(--font-hanken), "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; /* every word, Lime's own typeface | all text */
+  --font-sans: var(--font-inter), "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; /* every word and number, Inter | all text */
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace; /* code and keys only, Lime's stock value | code, shortcut */
   --text-xs: 12px; /* captions, counters | badge, hint */
   --text-sm: 14px; /* controls and body | button, input, menu item */

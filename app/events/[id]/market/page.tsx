@@ -22,6 +22,7 @@ import { allActivity } from "@/lib/fairseat/store";
 import { describe, formatTime } from "@/lib/fairseat/story";
 import { RESALE_RATE, txUrl } from "@/lib/fairseat/xrpl";
 import { MarketChart } from "../../../_components/market-chart";
+import { LiveRefresh, LiveValue } from "../../../_components/live";
 import { PageSkeleton } from "../../../_components/page-skeleton";
 import { TeamMark } from "../../../_components/team-mark";
 
@@ -170,14 +171,14 @@ async function MarketContent({
                           {team.team}
                         </span>
                       </TableCell>
-                      <TableCell className="text-end font-mono tabular-nums">
-                        {percent(team.chance)}
+                      <TableCell className="text-end tabular-nums">
+                        <LiveValue kind="percent" value={team.chance} />
                       </TableCell>
                       <TableCell>
                         <Change points={team.change} />
                       </TableCell>
-                      <TableCell className="text-end font-mono tabular-nums">
-                        {formatAmount(team.from)}
+                      <TableCell className="text-end tabular-nums">
+                        <LiveValue value={team.from} />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -251,8 +252,11 @@ export default function MarketPage({
   params,
 }: PageProps<"/events/[id]/market">) {
   return (
-    <Suspense fallback={<PageSkeleton />}>
-      <MarketContent params={params} />
-    </Suspense>
+    <>
+      <LiveRefresh />
+      <Suspense fallback={<PageSkeleton />}>
+        <MarketContent params={params} />
+      </Suspense>
+    </>
   );
 }

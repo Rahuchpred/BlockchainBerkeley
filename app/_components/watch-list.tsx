@@ -1,6 +1,6 @@
 import { Card, CardTitle } from "@/components/lime/ui/card";
-import { percent } from "@/lib/fairseat/data";
 import type { WatchedMarket } from "@/lib/fairseat/live";
+import { LiveValue } from "./live";
 import { OwnershipBar } from "./ownership-bar";
 import { TeamMark } from "./team-mark";
 
@@ -43,7 +43,7 @@ export function WatchList({ markets }: { markets: WatchedMarket[] }) {
                           {outcome.team}
                         </span>
                         <span className="text-fg-2 tabular-nums">
-                          {percent(outcome.chance)}
+                          <LiveValue kind="percent" value={outcome.chance} />
                         </span>
                       </li>
                     ))}

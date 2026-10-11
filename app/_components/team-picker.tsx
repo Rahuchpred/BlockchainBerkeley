@@ -30,7 +30,7 @@ export function TeamPicker({
 
   return (
     <Field name="team" className="w-full sm:w-64">
-      <FieldLabel>Team you organize for</FieldLabel>
+      <FieldLabel>Your club</FieldLabel>
       <Select
         items={items}
         value={team}

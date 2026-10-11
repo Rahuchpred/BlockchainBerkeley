@@ -34,6 +34,7 @@ import {
 } from "@/lib/fairseat/store";
 import { shortAddress } from "@/lib/fairseat/story";
 import { accountUrl, getTeamOrganizer, txUrl } from "@/lib/fairseat/xrpl";
+import { LiveRefresh, LiveValue } from "../../_components/live";
 import { PageSkeleton } from "../../_components/page-skeleton";
 import { ReleaseList } from "../../_components/release-list";
 import { Stat } from "../../_components/stat";
@@ -111,16 +112,16 @@ async function Desk() {
           <Button
             variant="ghost"
             size="icon"
-            aria-label="Back to the organizer page"
+            aria-label="Back to the dashboard"
             nativeButton={false}
             render={<Link href="/organizer" />}
             icon={<Icon icon={ArrowLeft} size={20} />}
           />
           <div className="flex flex-col gap-2">
-            <h1 className="title-page">{`${name} team desk`}</h1>
+            <h1 className="title-page">{`${name} club desk`}</h1>
             <p className="max-w-xl text-base leading-normal text-fg-2">
-              Each NBA team releases its own tickets from its own wallet on the
-              XRP Ledger, and is paid into that wallet.
+              The club is the organizer. It releases its own tickets from its
+              own wallet on the XRP Ledger, and is paid into that wallet.
             </p>
           </div>
         </div>
@@ -130,24 +131,24 @@ async function Desk() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Stat
           label="Tickets released"
-          value={String(mine.length)}
-          note="Minted by this team's wallet"
+          value={mine.length}
+          kind="count"
+          note="Minted by this club's wallet"
         />
         <Stat
           label="Tickets sold"
-          value={String(mine.filter((ticket) => sold.has(ticket.nftId)).length)}
+          value={mine.filter((ticket) => sold.has(ticket.nftId)).length}
+          kind="count"
           note={`${mine.filter((ticket) => !sold.has(ticket.nftId)).length} still on sale`}
         />
         <Stat
           label="Held in escrow"
-          value={formatAmount(
-            sum(mine.map((ticket) => escrows[ticket.nftId]?.amount ?? 0)),
-          )}
-          note="The team's once the finalists are decided"
+          value={sum(mine.map((ticket) => escrows[ticket.nftId]?.amount ?? 0))}
+          note="The club's once the finalists are decided"
         />
         <Stat
-          label="Paid to the team"
-          value={formatAmount(sum(paidOut.map((step) => step.amount ?? 0)))}
+          label="Paid to the club"
+          value={sum(paidOut.map((step) => step.amount ?? 0))}
           note="From settled events"
         />
       </div>
@@ -156,8 +157,8 @@ async function Desk() {
         <h2 className="text-lg font-semibold">{`The ${name} wallet on the ledger`}</h2>
         {wallet ? (
           <div className="flex flex-wrap items-center gap-3">
-            <p className="font-mono text-sm text-fg-2">
-              {shortAddress(wallet.address)}
+            <p className="text-sm text-fg-2">
+              <span className="font-mono">{shortAddress(wallet.address)}</span>
               {wallet.ready
                 ? ` holds ${formatAmount(wallet.balance)}`
                 : " is not open yet"}
@@ -186,8 +187,8 @@ async function Desk() {
         )}
         {wallet && !wallet.ready && (
           <p className="max-w-xl text-sm leading-normal text-fg-2">
-            The wallet is opened on the testnet the first time the team
-            releases tickets.
+            The wallet is opened on the testnet the first time the club releases
+            tickets.
           </p>
         )}
       </section>
@@ -200,7 +201,7 @@ async function Desk() {
             {side.name}.{" "}
             {side.settled
               ? `${side.settled} made the final, so no more tickets can be released.`
-              : `A released ticket goes on sale at ${percent(outcome.share)} of its seat's full price, the team's share at the live odds.`}
+              : `A released ticket goes on sale at ${percent(outcome.share)} of its seat's full price, the club's share at the live odds.`}
           </p>
           {!side.settled && (
             <ReleaseList
@@ -268,8 +269,8 @@ async function Desk() {
                       <Badge variant="success">Sold and paid</Badge>
                     )}
                   </TableCell>
-                  <TableCell className="text-end font-mono tabular-nums">
-                    {formatAmount(ticket.amount)}
+                  <TableCell className="text-end tabular-nums">
+                    <LiveValue value={ticket.amount} />
                   </TableCell>
                   <TableCell>
                     {ticket.minted && (
@@ -301,8 +302,11 @@ async function Desk() {
 
 export default function TeamDeskPage() {
   return (
-    <Suspense fallback={<PageSkeleton />}>
-      <Desk />
-    </Suspense>
+    <>
+      <LiveRefresh every={30_000} />
+      <Suspense fallback={<PageSkeleton />}>
+        <Desk />
+      </Suspense>
+    </>
   );
 }

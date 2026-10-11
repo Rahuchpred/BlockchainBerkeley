@@ -3,8 +3,8 @@
 import { useState, useTransition } from "react";
 import { Badge } from "@/components/lime/ui/badge";
 import { Button } from "@/components/lime/ui/button";
+import { LiveValue } from "./live";
 import { List, ListItem } from "@/components/lime/ui/list";
-import { formatAmount } from "@/components/lime/ui/amount";
 import { releaseSection } from "../actions";
 
 export type ReleaseRow = {
@@ -44,7 +44,11 @@ export function ReleaseList({
               key={row.section}
               title={`Section ${row.section}`}
               // Kept short: on a phone the row shares its width with the button.
-              description={`${row.seats} seats, ${formatAmount(row.price)} each`}
+              description={
+                <>
+                  {row.seats} seats, <LiveValue value={row.price} /> each
+                </>
+              }
               trailing={
                 left === 0 ? (
                   <Badge variant="success">All released</Badge>

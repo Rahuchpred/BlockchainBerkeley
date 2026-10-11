@@ -44,9 +44,7 @@ function Row({
   return (
     <div className="flex justify-between gap-3">
       <dt className="text-fg-2">{label}</dt>
-      <dd className={mono ? "text-end font-mono tabular-nums" : "text-end"}>
-        {value}
-      </dd>
+      <dd className={mono ? "text-end tabular-nums" : "text-end"}>{value}</dd>
     </div>
   );
 }
@@ -79,8 +77,10 @@ async function ReviewPageContent({
   const back = `/events/${event.id}/seats/${seat.id}`;
 
   // Seats beside this one, in its row, can be paid for together while this team's ticket for each
-  // is unsold. A ticket that was sold once is bought on its own.
-  const run = taken
+  // is unsold. A ticket that was sold once is bought on its own, and so is one a club released,
+  // since the club offers each of those to its buyer.
+  const run =
+    taken || event.teamWallets
     ? [seat]
     : seatsBeside(
         event,
@@ -112,7 +112,7 @@ async function ReviewPageContent({
         </header>
         <Card variant="outline">
           <div className="flex flex-col items-center gap-1 text-center">
-            <p className="font-mono text-3xl font-semibold tracking-tight tabular-nums">
+            <p className="text-3xl font-semibold tracking-tight tabular-nums">
               {formatAmount(total)}
             </p>
             <p className="text-sm leading-normal text-fg-2">
@@ -170,9 +170,7 @@ async function ReviewPageContent({
                 ))}
                 <div className="flex justify-between gap-3 border-t border-line pt-2 font-medium">
                   <dt>Total</dt>
-                  <dd className="font-mono tabular-nums">
-                    {formatAmount(total)}
-                  </dd>
+                  <dd className="tabular-nums">{formatAmount(total)}</dd>
                 </div>
               </div>
             )}

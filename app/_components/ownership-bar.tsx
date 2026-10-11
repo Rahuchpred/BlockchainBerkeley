@@ -1,4 +1,5 @@
 import { percent } from "@/lib/fairseat/data";
+import { LiveValue } from "./live";
 
 export type Share = { team: string; share: number; tone: number };
 
@@ -65,7 +66,7 @@ export function OwnershipBar({
                   } as React.CSSProperties
                 }
               />
-              {item.team} {percent(item.share)}
+              {item.team} <LiveValue kind="percent" value={item.share} />
             </li>
           ))}
           {unlisted > 0 && (
@@ -74,7 +75,7 @@ export function OwnershipBar({
                 aria-hidden="true"
                 className="size-2 shrink-0 rounded-full bg-(--team-0)"
               />
-              {unlisted} more {percent(unlistedShare)}
+              {unlisted} more <LiveValue kind="percent" value={unlistedShare} />
             </li>
           )}
         </ul>

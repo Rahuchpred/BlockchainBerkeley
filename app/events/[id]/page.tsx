@@ -13,17 +13,14 @@ import {
   type Seat,
 } from "@/lib/fairseat/data";
 import { findEvent } from "@/lib/fairseat/events";
-import {
-  holderOf,
-  releasedTickets,
-  soldTickets,
-} from "@/lib/fairseat/store";
+import { holderOf, releasedTickets, soldTickets } from "@/lib/fairseat/store";
 import { readWallet } from "@/lib/fairseat/wallet";
 import { Button } from "@/components/lime/ui/button";
 import Link from "next/link";
 import { fromPrice, loadSides, type LiveSide } from "@/lib/fairseat/live";
 import { SeatFinder } from "../../_components/seat-finder";
 import type { SectionInfo } from "../../_components/stadium-map";
+import { LiveRefresh } from "../../_components/live";
 import { PageSkeleton } from "../../_components/page-skeleton";
 
 export function generateStaticParams() {
@@ -156,6 +153,7 @@ async function EventPageContent({
 export default function EventPage({ params }: PageProps<"/events/[id]">) {
   return (
     <>
+      <LiveRefresh />
       <Suspense fallback={<PageSkeleton />}>
         <EventPageContent params={params} />
       </Suspense>

@@ -175,7 +175,7 @@ async function TicketPageContent({
             <section className="flex flex-col gap-3 rounded-panel bg-surface p-4">
               <div className="flex flex-wrap items-baseline justify-between gap-3">
                 <h2 className="text-lg font-semibold">{`${outcome.team}'s chance`}</h2>
-                <p className="font-mono text-2xl font-semibold tracking-tight tabular-nums">
+                <p className="text-2xl font-semibold tracking-tight tabular-nums">
                   {percent(outcome.chance)}
                 </p>
               </div>

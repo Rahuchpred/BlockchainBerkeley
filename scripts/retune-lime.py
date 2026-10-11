@@ -1,4 +1,4 @@
-"""Retune the Lime design system for Fairseat: blue accent, stock Lime fonts.
+"""Retune the Lime design system for Fairseat: blue accent, Inter for text and numbers.
 
 Installing a Lime component with `shadcn add --overwrite` rewrites
 components/lime/tokens.css and the skill files back to stock. Run this again
@@ -32,7 +32,7 @@ LIGHT = {
     "glow-accent-to-lit": ("#76a4f4", "bottom of the body when powered on | glow-accent"),
     "glow-accent-from-press": ("#2a5bc0", "top of the body while pressed, a darker body | glow-accent"),
     "glow-accent-to-press": ("#4a82e6", "bottom of the body while pressed | glow-accent"),
-    "font-sans": ('var(--font-hanken), "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif', "every word, Lime's own typeface | all text"),
+    "font-sans": ('var(--font-inter), "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif', "every word and number, Inter | all text"),
     "font-mono": ('ui-monospace, "SF Mono", Menlo, Consolas, monospace', "code and keys only, Lime's stock value | code, shortcut"),
 }
 
@@ -55,7 +55,7 @@ DARK = {
 HANKEN_IMPORT = '@import url("https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&display=swap");\n'
 FONT_NOTE_OLD = "Font: Hanken Grotesk, SIL OFL, from Google Fonts. */"
 FONT_NOTE_NEW = (
-    "Font: Hanken Grotesk, SIL OFL, loaded by next/font in app/layout.tsx in place of the stylesheet import.\n\n"
+    "Font: Inter, SIL OFL, loaded by next/font in app/layout.tsx in place of the stylesheet import.\n\n"
     "   Retuned for Fairseat by scripts/retune-lime.py: the accent is blue (the creator-ops brand ramp,\n"
     "   #356ed8) in place of the acid lime, with white text on it in the light theme. Comments below that\n"
     "   still say lime mean the accent. */"
@@ -66,8 +66,8 @@ SOURCE_ANCHOR = '@source "../../lib/lime";\n'
 SOURCE_APP = '@source "../../app";\n'
 
 SKILL_NOTE = (
-    "\nProject override (Fairseat): the accent is blue (#356ed8), not acid lime, and the fonts are Lime's "
-    "own (Hanken Grotesk). Text on the accent is white in the light theme (--on-accent). Wherever these rules say "
+    "\nProject override (Fairseat): the accent is blue (#356ed8), not acid lime, and the font is Inter, for "
+    "words and numbers alike. Text on the accent is white in the light theme (--on-accent). Wherever these rules say "
     'lime, read the blue accent. The "No blue" line in the reject list does not apply to the accent. '
     "After installing a Lime component, run python3 scripts/retune-lime.py.\n"
 )
@@ -101,7 +101,7 @@ def main() -> None:
         text = skill.read_text()
         if "Project override (Fairseat)" not in text:
             skill.write_text(text.replace("# Lime\n", "# Lime\n" + SKILL_NOTE, 1))
-    print("Lime retuned: blue accent, stock Lime fonts.")
+    print("Lime retuned: blue accent, Inter.")
 
 
 if __name__ == "__main__":
