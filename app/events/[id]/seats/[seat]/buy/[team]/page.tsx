@@ -16,7 +16,12 @@ import {
 } from "@/lib/fairseat/data";
 import { findEvent } from "@/lib/fairseat/events";
 import { loadSide } from "@/lib/fairseat/live";
-import { offerFor, soldTicket, ticketKey } from "@/lib/fairseat/store";
+import {
+  offerFor,
+  releasedTicket,
+  soldTicket,
+  ticketKey,
+} from "@/lib/fairseat/store";
 import { readWallet } from "@/lib/fairseat/wallet";
 import { PageSkeleton } from "../../../../../../_components/page-skeleton";
 import { PayButton } from "../../../../../../_components/pay-button";
@@ -53,7 +58,10 @@ async function ReviewPageContent({
   if (!outcome) notFound();
 
   // A ticket that was already sold can only be bought from its holder, at the price they listed.
-  const taken = soldTicket(ticketKey(event.id, seat.id, outcome.slug));
+  const key = ticketKey(event.id, seat.id, outcome.slug);
+  const taken = soldTicket(key);
+  // Where teams sell their own tickets, there is nothing to buy until the team has released it.
+  if (event.teamWallets && !taken && !releasedTicket(key)) notFound();
   const offer = taken ? offerFor(taken) : null;
   const resale = offer && offer.price > 0 ? offer.price : null;
   const price = resale ?? priceFor(seat, outcome.share);

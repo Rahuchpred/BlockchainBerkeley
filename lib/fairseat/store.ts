@@ -35,6 +35,24 @@ export function recordSale(key: string, nftId: string) {
   write("sold.json", { ...read<Sold>("sold.json", {}), [key]: nftId });
 }
 
+// Which tickets a team's organizer has released: minted into its account, on sale until one is sold.
+export const releasedTicket = (key: string) =>
+  read<Sold>("released.json", {})[key] ?? null;
+
+export function recordReleases(tickets: { key: string; nftId: string }[]) {
+  write("released.json", {
+    ...read<Sold>("released.json", {}),
+    ...Object.fromEntries(tickets.map((ticket) => [ticket.key, ticket.nftId])),
+  });
+}
+
+/** Every ticket a team has released, sold or not, as its key and its id on the ledger. */
+export const releasedTickets = () =>
+  Object.entries(read<Sold>("released.json", {})).map(([key, nftId]) => {
+    const [eventId, seatId, team] = key.split("|");
+    return { eventId, seatId, team, nftId };
+  });
+
 /** An offer a holder has open on the ledger for one of their tickets. A price of 0 is a gift. */
 export type Offer = {
   offerId: string;

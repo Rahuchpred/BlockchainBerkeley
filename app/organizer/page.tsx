@@ -30,7 +30,11 @@ const sum = (values: number[]) =>
 
 async function Dashboard() {
   await connection();
-  const sold = soldTickets();
+  // Events whose teams sell their own tickets are paid into the teams' wallets, not this one.
+  const events = allEvents().filter((event) => !event.teamWallets);
+  const sold = soldTickets().filter((ticket) =>
+    events.some((event) => event.id === ticket.eventId),
+  );
   const escrows = pendingEscrows();
   const activity = allActivity();
   const account = organizerAddress();
@@ -41,7 +45,7 @@ async function Dashboard() {
   const amounts = (steps: typeof activity) =>
     steps.map((step) => step.amount ?? 0);
 
-  const rows = allEvents().map((event) => {
+  const rows = events.map((event) => {
     const tickets = sold.filter((ticket) => ticket.eventId === event.id);
     const of = (steps: typeof activity) =>
       steps.filter((step) => step.eventId === event.id);
@@ -56,7 +60,7 @@ async function Dashboard() {
 
   const byTeam = new Map<string, { event: string; team: string; n: number }>();
   for (const ticket of sold) {
-    const event = allEvents().find((item) => item.id === ticket.eventId);
+    const event = events.find((item) => item.id === ticket.eventId);
     const key = `${ticket.eventId}|${ticket.team}`;
     const known = byTeam.get(key);
     byTeam.set(key, {
@@ -174,6 +178,23 @@ async function Dashboard() {
             ))}
           </TableBody>
         </Table>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-semibold">NBA teams</h2>
+        <p className="max-w-xl text-sm leading-normal text-fg-2">
+          The 30 NBA teams sell their own tickets. Each team releases them from
+          its own wallet on the ledger and is paid into it.
+        </p>
+        <div>
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<Link href="/organizer/nba" />}
+          >
+            Open the team desk
+          </Button>
+        </div>
       </section>
 
       {teams.length > 0 && (

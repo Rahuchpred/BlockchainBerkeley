@@ -18,7 +18,7 @@ export type EventSummary = {
   from: number | null;
 };
 
-const SPORTS = ["All", "Football", "Baseball"];
+const SPORTS = ["All", "Football", "Baseball", "NBA"];
 
 export function EventBrowser({ events }: { events: EventSummary[] }) {
   const [sport, setSport] = useState("All");

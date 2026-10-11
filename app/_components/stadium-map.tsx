@@ -59,6 +59,31 @@ function Field({ kind }: { kind: VenueMap["field"] }) {
       </g>
     );
   }
+  if (kind === "basketball") {
+    return (
+      <g className="fill-none stroke-line-strong" strokeWidth={1}>
+        <rect
+          x={CX - 104}
+          y={CY - 56}
+          width={208}
+          height={112}
+          rx={6}
+          className="fill-warn-tint"
+        />
+        <line x1={CX} x2={CX} y1={CY - 56} y2={CY + 56} />
+        <circle cx={CX} cy={CY} r={16} />
+        {/* Each end: the three-point line and the lane under the basket. */}
+        <path
+          d={`M${CX - 104} ${CY - 46}h16A46 46 0 0 1 ${CX - 88} ${CY + 46}h-16`}
+        />
+        <rect x={CX - 104} y={CY - 16} width={40} height={32} />
+        <path
+          d={`M${CX + 104} ${CY - 46}h-16A46 46 0 0 0 ${CX + 88} ${CY + 46}h16`}
+        />
+        <rect x={CX + 64} y={CY - 16} width={40} height={32} />
+      </g>
+    );
+  }
   return (
     <g>
       <rect

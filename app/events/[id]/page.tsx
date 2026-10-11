@@ -11,7 +11,11 @@ import {
   type Seat,
 } from "@/lib/fairseat/data";
 import { findEvent } from "@/lib/fairseat/events";
-import { holderOf, soldTickets } from "@/lib/fairseat/store";
+import {
+  holderOf,
+  releasedTickets,
+  soldTickets,
+} from "@/lib/fairseat/store";
 import { readWallet } from "@/lib/fairseat/wallet";
 import { Button } from "@/components/lime/ui/button";
 import Link from "next/link";
@@ -31,6 +35,12 @@ function seatSummary(seat: Seat, side: LiveSide) {
   return `${side.onSale.length} teams, ${formatAmount(Math.min(...prices))} to ${formatAmount(Math.max(...prices))}`;
 }
 
+/** Where teams sell their own tickets: how many of them have released theirs for a seat. */
+const releasedSummary = (teams: number) =>
+  teams === 0
+    ? "No team has released a ticket yet"
+    : `${teams} ${teams === 1 ? "team has" : "teams have"} released a ticket`;
+
 async function EventPageContent({
   params,
 }: Pick<PageProps<"/events/[id]">, "params">) {
@@ -44,6 +54,9 @@ async function EventPageContent({
 
   const wallet = await readWallet();
   const sold = soldTickets().filter((ticket) => ticket.eventId === event.id);
+  const released = releasedTickets().filter(
+    (ticket) => ticket.eventId === event.id,
+  );
 
   const seats = event.seats.map((seat) => {
     const side = sideOf(seat);
@@ -60,7 +73,13 @@ async function EventPageContent({
       side: seat.side,
       section: seat.section,
       label: seatLabel(seat),
-      summary: side ? seatSummary(seat, side) : "",
+      summary: !side
+        ? ""
+        : event.teamWallets && !side.settled
+          ? releasedSummary(
+              released.filter((ticket) => ticket.seatId === seat.id).length,
+            )
+          : seatSummary(seat, side),
       faceValue: seat.faceValue,
       href: `/events/${event.id}/seats/${seat.id}`,
     };

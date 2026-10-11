@@ -29,6 +29,8 @@ export type TeamTicket = {
   sold: boolean;
   /** The price its holder is reselling it for, if they have listed it. */
   resale: number | null;
+  /** Where teams sell their own tickets: this team's organizer has not released this one yet. */
+  unreleased?: boolean;
 };
 
 /** How many teams show before the rest are folded away. */
@@ -63,9 +65,11 @@ export function TeamTickets({
   faceValue: number;
   teams: TeamTicket[];
 }) {
-  const firstOpen = teams.find((team) => !team.sold) ?? teams[0];
-  /** A sold ticket can only be picked while its holder has it listed. */
-  const gone = (team: TeamTicket) => team.sold && team.resale === null;
+  const firstOpen =
+    teams.find((team) => !team.sold && !team.unreleased) ?? teams[0];
+  /** A sold ticket can only be picked while its holder has it listed, and an unreleased one not at all. */
+  const gone = (team: TeamTicket) =>
+    Boolean(team.unreleased) || (team.sold && team.resale === null);
   const [chosen, setChosen] = useState(firstOpen.slug);
   const [expanded, setExpanded] = useState(false);
   const [shares, setShares] = useState<Record<string, number>>({});
@@ -199,6 +203,8 @@ export function TeamTickets({
                     <Badge variant="warn">Resale</Badge>
                   ) : team.sold ? (
                     <Badge variant="outline">Sold</Badge>
+                  ) : team.unreleased ? (
+                    <Badge variant="outline">Not released</Badge>
                   ) : (
                     <span className="hidden sm:inline-flex">
                       <Change points={team.change} />

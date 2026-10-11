@@ -22,6 +22,7 @@ import { loadSide } from "@/lib/fairseat/live";
 import {
   holderOf,
   offerFor,
+  releasedTicket,
   soldTicket,
   ticketKey,
 } from "@/lib/fairseat/store";
@@ -51,7 +52,8 @@ async function SeatPageContent({
       const days = await getHistory(outcome.symbol, "1day");
       const last = days[days.length - 1];
       const before = days[days.length - 2];
-      const taken = soldTicket(ticketKey(event.id, seat.id, outcome.slug));
+      const key = ticketKey(event.id, seat.id, outcome.slug);
+      const taken = soldTicket(key);
       const offer = taken ? offerFor(taken) : null;
       return {
         slug: outcome.slug,
@@ -63,6 +65,8 @@ async function SeatPageContent({
         trend: days.slice(-30),
         sold: taken !== null,
         resale: offer && offer.price > 0 ? offer.price : null,
+        unreleased:
+          Boolean(event.teamWallets) && !taken && !releasedTicket(key),
       };
     }),
   );

@@ -3,6 +3,7 @@ import { Hanken_Grotesk } from "next/font/google";
 import "./globals.css";
 import "@/components/lime/styles.css";
 import "./teams.css";
+import "./sides.css";
 import { LimePortalProvider } from "@/lib/lime/portal";
 import { SiteHeader } from "./_components/site-header";
 

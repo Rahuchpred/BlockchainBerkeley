@@ -54,6 +54,29 @@ Example transactions on Testnet:
 - Buy, as one Batch: [ADE3B4E3...](https://testnet.xrpl.org/transactions/ADE3B4E3D512B0B12EB56227E4270817ABBC09F13A6232CD797359722E587159)
 - Settle, as one Batch: [4ECDF259...](https://testnet.xrpl.org/transactions/4ECDF25943B33B2C86288D34C00F92A9B5472E591DCA047DF01B0ED9231CB9F9)
 
+### NBA: one organizer wallet per team
+
+For the NBA event, each of the 30 teams sells its own tickets from its own organizer account on the
+ledger. The other events still use the single organizer account.
+
+1. **Release.** A team's organizer mints its tickets into its own account, up to eight in one
+   `Batch` of `NFTokenMint`. A ticket is on sale only once its team has released it.
+2. **Buy.** The team's organizer offers the ticket to the buyer alone (`NFTokenCreateOffer` with
+   `Destination`). The fan's `Batch` is the same as before, with the escrow made out to the team's
+   account.
+3. **Settle.** Each team's organizer releases its own escrows and burns its own expired tickets,
+   sold or not.
+
+The 30 accounts have separate keys, worked out from `XRPL_ORGANIZER_SEED` and the team, so there
+are no further seeds to store. The buyer and the organizer sides are separate pages: everything
+under `/organizer` is the organizer side, on a beige page so the two are not mistaken for each
+other, and the switch in the header goes from one to the other. The team desk at `/organizer/nba`
+is where a team is picked and its tickets are released.
+
+Gemini has one NBA market, for the champion, and none per conference. Each conference's side is
+that market cut down to its 15 teams, with their title chances shared out between them. That stands
+in for the chance of reaching the Finals and is not the same number.
+
 ### Why not RLUSD
 
 We wanted to price tickets in RLUSD. On Testnet the RLUSD issuer has not switched on the setting
@@ -88,6 +111,13 @@ Make the two Testnet accounts. This writes their seeds to `.env.local`:
 node --env-file-if-exists=.env.local scripts/setup-xrpl.mjs
 ```
 
+Optionally open the 30 NBA teams' organizer accounts now. Without this, a team's account is opened
+the first time it releases tickets, which takes about 20 seconds longer:
+
+```bash
+node --env-file-if-exists=.env.local scripts/setup-nba.mjs
+```
+
 Add a Context.dev key to `.env.local` as `CONTEXT_DEV_API_KEY` (only needed for listing an event).
 Then:
 
@@ -108,6 +138,9 @@ Open http://localhost:3000.
    tickets turn into seats with a gate code and the rest expire. **Settle on the ledger** then
    releases the escrows and burns the expired tickets.
 6. Open **List an event** to see the Context.dev checks. Try a wrong date first.
+7. For the NBA event, set the switch in the header to **Organizer**. Pick a team on the team desk
+   and release its tickets for a section. Switch back to **Buyer**: that team's tickets for those
+   seats can now be bought, and the money is held for the team's own wallet.
 
 ## Pages
 
@@ -123,6 +156,7 @@ Open http://localhost:3000.
 | `/wallet` | Balance, money locked in escrow, and every step with its transaction |
 | `/organizer` | What each event has sold and where the money is on the ledger |
 | `/organizer/new` | List an event, behind the Context.dev checks |
+| `/organizer/nba` | The team desk: pick an NBA team, release its tickets, see what it has sold |
 | `/demo` | Stage a result and settle it on the ledger |
 
 ## Limits
@@ -133,6 +167,8 @@ Open http://localhost:3000.
 - Sold tickets, open offers and listed events are indexed in a local `.data` folder. The tickets and
   the money themselves are on the ledger.
 - There is no limit on how many tickets one wallet can buy.
+- Nothing checks that a visitor in organizer mode runs the team they pick. The team wallets are
+  held by the server, like the single organizer's.
 - Finals played at the teams' home arenas need a second condition (the home team must also make it).
   The events here are treated as neutral venues.
 
