@@ -31,6 +31,8 @@ const eslintConfig = defineConfig([
     "components/lime/**",
     "lib/lime/**",
     "lime.eslint.config.mjs",
+    // Checkouts that agent sessions make beside the project. Each is linted in its own tree.
+    ".claude/worktrees/**",
   ]),
 ]);
 

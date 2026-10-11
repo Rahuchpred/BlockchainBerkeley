@@ -10,7 +10,18 @@ const timeFormat = new Intl.DateTimeFormat("en-US", {
   minute: "2-digit",
 });
 
+const yearFormat = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
 export const formatTime = (iso: string) => timeFormat.format(new Date(iso));
+
+/** A time that may be in another year, such as a refund deadline, with its year. */
+export const formatFarTime = (iso: string) => yearFormat.format(new Date(iso));
 
 /** An account, shortened to its first and last characters. */
 export const shortAddress = (address: string) =>

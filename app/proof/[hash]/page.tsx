@@ -10,7 +10,7 @@ import {
   EmptyTitle,
 } from "@/components/lime/ui/empty";
 import { Status } from "@/components/lime/ui/status";
-import { formatTime } from "@/lib/fairseat/story";
+import { formatFarTime, formatTime } from "@/lib/fairseat/story";
 import {
   explorerTxUrl,
   readTransaction,
@@ -72,7 +72,7 @@ function explain(step: ProofStep): { title: string; facts: Fact[] } {
             ? [
                 {
                   label: "The fan can take it back after",
-                  value: formatTime(step.refundAfter),
+                  value: formatFarTime(step.refundAfter),
                 },
               ]
             : []),

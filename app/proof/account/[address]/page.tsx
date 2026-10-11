@@ -91,7 +91,7 @@ async function AccountPageContent({
         <Stat
           label="Locked for this account"
           value={formatAmount(lockedForIt.dollars)}
-          note={`${count(lockedForIt.count, "payment", "payments")} held in escrow until the finalists are decided`}
+          note={`${count(lockedForIt.count, "payment", "payments")} held in escrow until each result is decided`}
         />
       </div>
 

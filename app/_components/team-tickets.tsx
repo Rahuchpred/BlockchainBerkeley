@@ -192,7 +192,7 @@ export function TeamTickets({
                           } as React.CSSProperties
                         }
                       />
-                      <span className="truncate">{team.team}</span>
+                      <span className="min-w-0">{team.team}</span>
                     </span>
                     <span className="truncate text-sm text-fg-3">
                       {percent(team.share)} of the seat

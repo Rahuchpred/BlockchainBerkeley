@@ -205,7 +205,11 @@ export function StadiumMap({
                   : "fill-accent group-hover/section:fill-accent-hover",
               )}
             />
-            <g aria-hidden="true">
+            {/* On a phone the map is drawn at half size, so the tag is drawn larger to stay readable. */}
+            <g
+              aria-hidden="true"
+              className="origin-center transform-fill max-sm:scale-150"
+            >
               <rect
                 x={item.tag.x - 44}
                 y={item.tag.y - 13}
