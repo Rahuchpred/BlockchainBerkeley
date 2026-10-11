@@ -45,3 +45,6 @@ next-env.d.ts
 
 # local record of sold tickets
 /.data
+
+# Other sessions keep their own checkouts here.
+/.claude/worktrees
