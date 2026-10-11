@@ -16,6 +16,8 @@ import {
   accountUrl,
   getBalance,
   organizerAddress,
+  organizerCredential,
+  txUrl,
 } from "@/lib/fairseat/xrpl";
 import { PageSkeleton } from "../_components/page-skeleton";
 import { Stat } from "../_components/stat";
@@ -80,6 +82,8 @@ async function Dashboard() {
   const activity = allActivity();
   const account = organizerAddress();
   const balance = await getBalance(account).catch(() => Number.NaN);
+  // Issued on the ledger the first time an event of theirs passes the page check.
+  const credential = await organizerCredential().catch(() => null);
 
   const released = activity.filter((step) => step.kind === "released");
   const resales = activity.filter((step) => step.kind === "resold");
@@ -134,10 +138,34 @@ async function Dashboard() {
           <p className="max-w-xl text-base leading-normal text-fg-2">
             What your events have sold, and where the money is on the ledger.
           </p>
+          {credential && (
+            <div className="flex flex-wrap items-center gap-3">
+              <Badge variant="success">Verified organizer on the ledger</Badge>
+              <Button
+                variant="link"
+                size="sm"
+                nativeButton={false}
+                render={
+                  <Link href={txUrl(credential.hash)} />
+                }
+              >
+                View the credential
+              </Button>
+            </div>
+          )}
         </div>
-        <Button nativeButton={false} render={<Link href="/organizer/new" />}>
-          List an event
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            variant="secondary"
+            nativeButton={false}
+            render={<Link href="/gate" />}
+          >
+            Check a ticket
+          </Button>
+          <Button nativeButton={false} render={<Link href="/organizer/new" />}>
+            List an event
+          </Button>
+        </div>
       </header>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -162,11 +190,7 @@ async function Dashboard() {
               size="sm"
               nativeButton={false}
               render={
-                <a
-                  href={accountUrl(account)}
-                  target="_blank"
-                  rel="noreferrer"
-                />
+                <Link href={accountUrl(account)} />
               }
             >
               View on the ledger

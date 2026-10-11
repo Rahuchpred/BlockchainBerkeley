@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Button } from "@/components/lime/ui/button";
 import type { Activity } from "@/lib/fairseat/store";
 import { describe, formatTime } from "@/lib/fairseat/story";
@@ -43,11 +44,7 @@ export function LedgerTrail({ steps }: { steps: Activity[] }) {
                     size="sm"
                     nativeButton={false}
                     render={
-                      <a
-                        href={txUrl(step.hash)}
-                        target="_blank"
-                        rel="noreferrer"
-                      />
+                      <Link href={txUrl(step.hash)} />
                     }
                   >
                     Proof

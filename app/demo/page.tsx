@@ -2,9 +2,15 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { allEvents } from "@/lib/fairseat/events";
 import { getMarket } from "@/lib/fairseat/gemini";
-import { ledgerSettlement, stagedResult } from "@/lib/fairseat/store";
+import { DEMO_REFUND_MINUTES, REFUND_DAYS } from "@/lib/fairseat/rules";
+import {
+  ledgerSettlement,
+  quickRefunds,
+  stagedResult,
+} from "@/lib/fairseat/store";
 import { txUrl } from "@/lib/fairseat/xrpl";
 import { PageSkeleton } from "../_components/page-skeleton";
+import { RefundSwitch } from "../_components/refund-switch";
 import {
   SettleControls,
   type SettleSide,
@@ -46,6 +52,16 @@ async function DemoContent() {
         </p>
       </header>
       <SettleControls sides={sides} />
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-semibold">Refunds</h2>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <RefundSwitch
+            on={quickRefunds()}
+            minutes={DEMO_REFUND_MINUTES}
+            days={REFUND_DAYS}
+          />
+        </div>
+      </section>
     </main>
   );
 }

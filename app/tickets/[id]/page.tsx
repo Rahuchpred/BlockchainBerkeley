@@ -9,6 +9,7 @@ import { formatDate, percent, placeOf } from "@/lib/fairseat/data";
 import { findEvent } from "@/lib/fairseat/events";
 import { getHistory } from "@/lib/fairseat/gemini";
 import { viewTicket } from "@/lib/fairseat/live";
+import { formatDeadline, refundAfterFor } from "@/lib/fairseat/rules";
 import { readWallet } from "@/lib/fairseat/wallet";
 import {
   activityFor,
@@ -27,6 +28,7 @@ import { qrShape } from "@/lib/fairseat/qr";
 import { OddsChart } from "../../_components/odds-chart";
 import { PageSkeleton } from "../../_components/page-skeleton";
 import { LedgerTrail } from "../../_components/ledger-trail";
+import { RefundButton } from "../../_components/refund-button";
 import { TicketActions } from "../../_components/ticket-actions";
 import { TicketPass } from "../../_components/ticket-pass";
 
@@ -60,6 +62,9 @@ async function TicketPageContent({
   const offer = open ? { offerId: open.offerId, price: open.price } : null;
 
   const { event, seat, outcome, status, worth } = view;
+  // A locked payment can be taken back once its deadline passes, if it was never released.
+  const now = new Date();
+  const refundAfter = locked && refundAfterFor(locked, event.date);
   const [hours, days] =
     status === "open"
       ? await Promise.all([
@@ -100,7 +105,7 @@ async function TicketPageContent({
               size="sm"
               nativeButton={false}
               render={
-                <a href={txUrl(receipt)} target="_blank" rel="noreferrer" />
+                <Link href={txUrl(receipt)} />
               }
             >
               View the transaction
@@ -137,6 +142,19 @@ async function TicketPageContent({
             <p className="text-sm leading-normal text-fg-2">
               {outcome.team} did not make the final, so this ticket has expired.
             </p>
+          )}
+          {locked && refundAfter && (
+            <section className="flex flex-col gap-3">
+              <h2 className="text-lg font-semibold">Your payment</h2>
+              <p className="max-w-xl text-sm leading-normal text-fg-2">
+                {`${formatAmount(locked.amount)} is held in escrow until the finalists are decided. If it is never released, you can take it back from ${formatDeadline(refundAfter, now)}.`}
+              </p>
+              <RefundButton
+                nftId={ticket.id}
+                after={refundAfter.toISOString()}
+                ready={now >= refundAfter}
+              />
+            </section>
           )}
           {status === "open" && (
             <section className="flex flex-col gap-3">

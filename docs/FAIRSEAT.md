@@ -172,8 +172,12 @@ Everything runs on the XRPL testnet. Code: `lib/fairseat/xrpl.ts`. The README ha
 RLUSD was the plan for the currency. Its testnet issuer has not enabled escrow for its token, so an
 escrow in RLUSD is refused. Smart escrow and the lending features are not on testnet yet.
 
-Not built: a limit on tickets per wallet, a button for the fan's refund after the deadline, and a
-second condition for finals played at home arenas.
+Fairness rules, checked by the server (`lib/fairseat/rules.ts`): one wallet holds at most 4 tickets
+for the same team in an event, and a resale asks at most 150% of what the ticket costs new right
+now. A fan takes an unreleased payment back from the ticket page or the wallet page once the
+deadline has passed. `/demo` can shorten that deadline to 2 minutes for new purchases.
+
+Not built: a second condition for finals played at home arenas.
 
 ## How Context.dev is used (live since phase 4)
 

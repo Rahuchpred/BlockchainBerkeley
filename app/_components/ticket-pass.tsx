@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { Badge } from "@/components/lime/ui/badge";
 import { Button } from "@/components/lime/ui/button";
@@ -274,7 +275,7 @@ export function TicketPass({
                   variant="outline"
                   size="sm"
                   nativeButton={false}
-                  render={<a href={href} target="_blank" rel="noreferrer" />}
+                  render={<Link href={href} />}
                 >
                   View on the ledger
                 </Button>

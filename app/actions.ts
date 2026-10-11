@@ -17,8 +17,18 @@ import {
   type Check,
   type SecondOpinion,
 } from "@/lib/fairseat/context";
-import { loadSide } from "@/lib/fairseat/live";
+import { loadSide, viewTicket } from "@/lib/fairseat/live";
 import {
+  DEMO_REFUND_MINUTES,
+  RESALE_CAP,
+  TICKET_LIMIT,
+  formatDeadline,
+  refundAfterFor,
+  refundDeadline,
+  resaleCap,
+} from "@/lib/fairseat/rules";
+import {
+  clearEscrow,
   clearOffer,
   escrowFor,
   findOffer,
@@ -26,6 +36,7 @@ import {
   ledgerSettlement,
   logActivity,
   offerFor,
+  quickRefunds,
   recordHolder,
   recordPaid,
   recordSale,
@@ -33,6 +44,7 @@ import {
   saveEscrow,
   saveEvent,
   saveOffer,
+  setQuickRefunds,
   soldTicket,
   soldTickets,
   stageResult,
@@ -47,14 +59,14 @@ import {
   listTickets,
   offerTicket,
   organizerAddress,
+  refundEscrow,
   settleTickets,
+  verifyOrganizer,
 } from "@/lib/fairseat/xrpl";
 import { allEvents } from "@/lib/fairseat/events";
+import { formatAmount } from "@/components/lime/ui/amount";
 
 export type ActionResult = { error: string } | undefined;
-
-/** How long after the event a fan must wait before taking back a payment that was never released. */
-const REFUND_DAYS = 30;
 
 const message = (error: unknown) =>
   error instanceof Error ? error.message : "Something went wrong on the ledger";
@@ -75,6 +87,19 @@ export async function getTestWallet(): Promise<ActionResult> {
     return { error: message(error) };
   }
 }
+
+/** Whether a wallet already holds as many tickets for a team in an event as one wallet may. */
+async function atLimit(address: string, eventId: string, team: string) {
+  // Counted from the ledger, so tickets bought, bought from a fan and claimed all count.
+  const held = await listTickets(address);
+  return (
+    held.filter((item) => item.eventId === eventId && item.team === team)
+      .length >= TICKET_LIMIT
+  );
+}
+
+const limitReached = (team: string) =>
+  `You already hold ${TICKET_LIMIT} ${team} tickets for this event. That is the limit.`;
 
 /** Buys one team's ticket for a seat at the live price, on the ledger. */
 export async function buyTeamTicket(
@@ -108,6 +133,8 @@ export async function buyTeamTicket(
       const wallet = await ensureWallet();
       if (wallet.address === offer.from)
         return { error: "This is your own listing" };
+      if (await atLimit(wallet.address, eventId, team))
+        return { error: limitReached(outcome.team) };
       ({ hash } = await acceptOffer(wallet.seed, offer.offerId));
       nftId = taken;
       clearOffer(taken);
@@ -127,17 +154,26 @@ export async function buyTeamTicket(
     } else {
       const price = priceFor(seat, outcome.share);
       const wallet = await ensureWallet();
+      if (await atLimit(wallet.address, eventId, team))
+        return { error: limitReached(outcome.team) };
       const paid = price + feeFor(price);
       // If the money is never released, the fan can take it back a month after the event.
-      const refundAfter = new Date(`${event.date}T12:00:00Z`);
-      refundAfter.setUTCDate(refundAfter.getUTCDate() + REFUND_DAYS);
+      // The demo switch brings that forward to a few minutes from now, so a refund can be shown.
+      const quick = quickRefunds();
+      const refundAfter = quick
+        ? new Date(Date.now() + DEMO_REFUND_MINUTES * 60_000)
+        : refundDeadline(event.date);
       const bought = await buyTicket(
         wallet.seed,
         { eventId, seatId, team, paid },
         refundAfter,
       );
       ({ nftId, hash } = bought);
-      saveEscrow(nftId, { ...bought.escrow, amount: paid });
+      saveEscrow(nftId, {
+        ...bought.escrow,
+        amount: paid,
+        ...(quick && { refundAfter: refundAfter.toISOString() }),
+      });
       recordHolder(nftId, wallet.address);
       const ticket = { nftId, eventId, seatId, team };
       logActivity(
@@ -182,6 +218,20 @@ export async function offerHeldTicket(
     if (!held) return { error: "That ticket is not in your wallet" };
     if (offerFor(nftId)) return { error: "This ticket already has an offer" };
     const amount = Math.round(price * 100) / 100;
+    if (amount > 0) {
+      // The cap follows the live price, so it is worked out here and never taken from the browser.
+      const view = await viewTicket(
+        { id: nftId, ...held.ticket },
+        findEvent(held.ticket.eventId),
+      );
+      if (!view)
+        return { error: "The seat for that ticket could not be found" };
+      const cap = resaleCap(view.worth);
+      if (amount > cap)
+        return {
+          error: `The most you can ask is ${formatAmount(cap)}. That is ${Math.round(RESALE_CAP * 100)}% of what this ticket costs new right now.`,
+        };
+    }
     const { offerId, hash } = await offerTicket(
       held.wallet.seed,
       nftId,
@@ -249,6 +299,13 @@ export async function claimTicket(offerId: string): Promise<ActionResult> {
         error:
           "You sent this ticket. Open the link in another browser to claim it.",
       };
+    if (await atLimit(wallet.address, offer.eventId, offer.team)) {
+      const view = await viewTicket(
+        { id: offer.nftId, ...offer, paid: 0 },
+        findEvent(offer.eventId),
+      );
+      return { error: limitReached(view?.outcome.team ?? offer.team) };
+    }
     ({ hash } = await acceptOffer(wallet.seed, offer.offerId));
     nftId = offer.nftId;
     clearOffer(nftId);
@@ -269,6 +326,58 @@ export async function claimTicket(offerId: string): Promise<ActionResult> {
   }
   revalidatePath("/", "layout");
   redirect(`/tickets/${nftId}?claimed=${hash}`);
+}
+
+/**
+ * Gives a fan back a payment that was never released to the organizer. Only the wallet that paid
+ * can ask, only while the payment is still locked, and only once its deadline has passed.
+ */
+export async function takeRefund(nftId: string): Promise<ActionResult> {
+  try {
+    const wallet = await readWallet();
+    const escrow = escrowFor(nftId);
+    if (!wallet || !escrow || escrow.owner !== wallet.address)
+      return { error: "There is no payment of yours locked for this ticket" };
+    const ticket = soldTickets().find((item) => item.nftId === nftId);
+    const event = ticket && findEvent(ticket.eventId);
+    if (!ticket || !event)
+      return { error: "The event for that ticket could not be found" };
+    const after = refundAfterFor(escrow, event.date);
+    const now = new Date();
+    if (now < after)
+      return {
+        error: `This payment can be taken back from ${formatDeadline(after, now)}`,
+      };
+    let hash: string;
+    try {
+      ({ hash } = await refundEscrow(wallet.seed, escrow));
+    } catch (error) {
+      // The ledger keeps its own clock, a few seconds behind this one.
+      if (message(error).includes("tecNO_PERMISSION"))
+        return {
+          error:
+            "The ledger has not reached the refund time yet. Try again in a few seconds.",
+        };
+      throw error;
+    }
+    clearEscrow(nftId);
+    logActivity({
+      ...ticket,
+      kind: "refunded",
+      amount: escrow.amount,
+      hash,
+      to: wallet.address,
+    });
+  } catch (error) {
+    return { error: message(error) };
+  }
+  revalidatePath("/", "layout");
+}
+
+/** Demo only: makes new purchases refundable after a few minutes, so the refund can be shown. */
+export async function stageQuickRefunds(on: boolean): Promise<void> {
+  setQuickRefunds(on);
+  revalidatePath("/", "layout");
 }
 
 /** Demo only: says a team made the final, as the market will when it settles. Null undoes it. */
@@ -350,6 +459,8 @@ export async function publishEvent(input: NewEvent): Promise<PublishResult> {
     seats: seats("side", String(section), Math.round(input.price * 100) / 100),
     checkedAgainst: result.page,
   });
+  // The pass is written to the ledger as a credential. The event is on sale whether or not that works.
+  await verifyOrganizer(input.link).catch(() => undefined);
   revalidatePath("/", "layout");
   return { ...report, eventId: id };
 }

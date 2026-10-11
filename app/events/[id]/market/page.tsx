@@ -232,11 +232,7 @@ async function MarketContent({
                           size="sm"
                           nativeButton={false}
                           render={
-                            <a
-                              href={txUrl(step.hash)}
-                              target="_blank"
-                              rel="noreferrer"
-                            />
+                            <Link href={txUrl(step.hash)} />
                           }
                         >
                           Transaction

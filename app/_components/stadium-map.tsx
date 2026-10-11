@@ -207,9 +207,9 @@ export function StadiumMap({
             />
             <g aria-hidden="true">
               <rect
-                x={item.tag.x - 34}
+                x={item.tag.x - 44}
                 y={item.tag.y - 13}
-                width={68}
+                width={88}
                 height={26}
                 rx={13}
                 className="fill-raised stroke-line-strong"
@@ -224,7 +224,7 @@ export function StadiumMap({
               >
                 {item.info.from === null
                   ? item.id
-                  : formatAmount(item.info.from, { compact: true })}
+                  : `from ${formatAmount(item.info.from, { compact: true })}`}
               </text>
             </g>
           </g>

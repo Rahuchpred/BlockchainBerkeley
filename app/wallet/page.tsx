@@ -19,9 +19,11 @@ import {
 import { formatAmount } from "@/components/lime/ui/amount";
 import { seatLabel } from "@/lib/fairseat/data";
 import { findEvent } from "@/lib/fairseat/events";
+import { formatDeadline, refundAfterFor } from "@/lib/fairseat/rules";
 import {
   allActivity,
   pendingEscrows,
+  soldTickets,
   type Activity,
 } from "@/lib/fairseat/store";
 import { formatTime, shortAddress } from "@/lib/fairseat/story";
@@ -33,6 +35,7 @@ import {
   txUrl,
 } from "@/lib/fairseat/xrpl";
 import { PageSkeleton } from "../_components/page-skeleton";
+import { RefundButton } from "../_components/refund-button";
 import { Stat } from "../_components/stat";
 import { WalletChip } from "../_components/wallet-chip";
 
@@ -58,6 +61,8 @@ function line(step: Activity, me: string): { what: string; change: number } {
         : { what: "A friend claimed your ticket", change: 0 };
     case "released":
       return { what: "Escrow released to the organizer", change: 0 };
+    case "refunded":
+      return { what: "Took a payment back from escrow", change: amount };
     case "burned":
       return { what: "Ticket expired", change: 0 };
     default:
@@ -87,9 +92,24 @@ async function WalletContent() {
   }
 
   const balance = await getBalance(wallet.address).catch(() => Number.NaN);
-  const locked = Object.values(pendingEscrows())
-    .filter((escrow) => escrow.owner === wallet.address)
-    .reduce((sum, escrow) => sum + escrow.amount, 0);
+  const now = new Date();
+  const sold = soldTickets();
+  // Each payment of this wallet's still in escrow, with the day it can be taken back.
+  const payments = Object.entries(pendingEscrows())
+    .filter(([, escrow]) => escrow.owner === wallet.address)
+    .map(([nftId, escrow]) => {
+      const ticket = sold.find((item) => item.nftId === nftId);
+      const event = ticket && findEvent(ticket.eventId);
+      const seat = event?.seats.find((item) => item.id === ticket?.seatId);
+      return {
+        nftId,
+        amount: escrow.amount,
+        event: event?.title ?? "",
+        seat: seat ? seatLabel(seat) : (ticket?.seatId ?? ""),
+        refundAfter: event ? refundAfterFor(escrow, event.date) : null,
+      };
+    });
+  const locked = payments.reduce((sum, payment) => sum + payment.amount, 0);
   const steps = allActivity()
     .filter(
       (step) =>
@@ -130,16 +150,69 @@ async function WalletContent() {
           variant="outline"
           nativeButton={false}
           render={
-            <a
-              href={accountUrl(wallet.address)}
-              target="_blank"
-              rel="noreferrer"
-            />
+            <Link href={accountUrl(wallet.address)} />
           }
         >
           View the account on the ledger
         </Button>
       </div>
+
+      {payments.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-lg font-semibold">Locked payments</h2>
+          <p className="max-w-xl text-sm leading-normal text-fg-2">
+            Each payment waits in escrow until the finalists are decided. If one
+            is never released, you can take it back from the date shown.
+          </p>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Ticket</TableHead>
+                <TableHead>Event</TableHead>
+                <TableHead className="text-end">Dollars</TableHead>
+                <TableHead>Can be taken back from</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {payments.map((payment) => (
+                <TableRow key={payment.nftId}>
+                  <TableCell className="whitespace-nowrap">
+                    <Button
+                      variant="link"
+                      size="sm"
+                      nativeButton={false}
+                      render={<Link href={`/tickets/${payment.nftId}`} />}
+                    >
+                      {payment.seat}
+                    </Button>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-fg-2">
+                    {payment.event}
+                  </TableCell>
+                  <TableCell className="text-end font-mono tabular-nums">
+                    {formatAmount(payment.amount)}
+                  </TableCell>
+                  <TableCell>
+                    {payment.refundAfter && (
+                      <div className="flex flex-col gap-2">
+                        <span className="whitespace-nowrap text-fg-2">
+                          {formatDeadline(payment.refundAfter, now)}
+                        </span>
+                        <RefundButton
+                          nftId={payment.nftId}
+                          after={payment.refundAfter.toISOString()}
+                          ready={now >= payment.refundAfter}
+                          size="sm"
+                        />
+                      </div>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </section>
+      )}
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Activity</h2>
@@ -186,11 +259,7 @@ async function WalletContent() {
                           size="sm"
                           nativeButton={false}
                           render={
-                            <a
-                              href={txUrl(step.hash)}
-                              target="_blank"
-                              rel="noreferrer"
-                            />
+                            <Link href={txUrl(step.hash)} />
                           }
                         >
                           Transaction

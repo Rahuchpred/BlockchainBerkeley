@@ -16,6 +16,7 @@ import {
 } from "@/lib/fairseat/data";
 import { findEvent } from "@/lib/fairseat/events";
 import { loadSide } from "@/lib/fairseat/live";
+import { TICKET_LIMIT } from "@/lib/fairseat/rules";
 import { offerFor, soldTicket, ticketKey } from "@/lib/fairseat/store";
 import { readWallet } from "@/lib/fairseat/wallet";
 import { PageSkeleton } from "../../../../../../_components/page-skeleton";
@@ -113,6 +114,9 @@ async function ReviewPageContent({
             not refunded. You can resell it at any time before then.
             {resale === null &&
               " Your payment is held in escrow on the XRP Ledger and released to the organizer once the finalists are decided."}
+          </p>
+          <p className="text-sm leading-normal text-fg-2">
+            {`One wallet can hold up to ${TICKET_LIMIT} ${outcome.team} tickets for this event.`}
           </p>
           <PayButton
             eventId={event.id}

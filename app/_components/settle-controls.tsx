@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/lime/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/lime/ui/card";
@@ -67,7 +68,7 @@ export function SettleControls({ sides }: { sides: SettleSide[] }) {
                             size="sm"
                             nativeButton={false}
                             render={
-                              <a href={link} target="_blank" rel="noreferrer" />
+                              <Link href={link} />
                             }
                           >
                             {side.ledger?.length === 1

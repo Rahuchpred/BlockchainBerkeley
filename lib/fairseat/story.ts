@@ -63,6 +63,12 @@ export function describe(
         title: `${amount} released to the organizer`,
         detail: "The finalists were decided, so the escrow was opened.",
       };
+    case "refunded":
+      return {
+        title: `${amount} taken back by the fan`,
+        detail:
+          "The escrow was never released and its deadline passed, so the fan undid it.",
+      };
     case "burned":
       return {
         title: "Expired and burned",

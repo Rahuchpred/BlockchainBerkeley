@@ -133,7 +133,10 @@ Open http://localhost:3000.
   real wallet should be held.
 - Sold tickets, open offers and listed events are indexed in a local `.data` folder. The tickets and
   the money themselves are on the ledger.
-- There is no limit on how many tickets one wallet can buy.
+- One wallet can hold at most 4 tickets for the same team in an event, and a resale can ask at most
+  150% of what the ticket costs new at that moment. Both are checked by the server, not by the
+  ledger. The numbers are in [`lib/fairseat/rules.ts`](lib/fairseat/rules.ts).
+- A fan who takes a payment back after the deadline keeps the ticket. Fairseat does not burn it.
 - Finals played at the teams' home arenas need a second condition (the home team must also make it).
   The events here are treated as neutral venues.
 

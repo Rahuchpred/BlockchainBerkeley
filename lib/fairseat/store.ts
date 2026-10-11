@@ -59,10 +59,18 @@ type Market = {
   holders?: Record<string, string>;
   /** The transactions that settled each market on the ledger. */
   settled?: Record<string, string[]>;
+  /** Demo only: new purchases get a refund deadline minutes away instead of a month after the event. */
+  quickRefunds?: boolean;
 };
 
 /** A fan's payment for a ticket, held on the ledger until the finalists are decided. */
-export type Escrow = { owner: string; sequence: number; amount: number };
+export type Escrow = {
+  owner: string;
+  sequence: number;
+  amount: number;
+  /** When the fan can take it back, as an ISO time, if that is not the event's usual deadline. */
+  refundAfter?: string;
+};
 
 const market = () =>
   read<Market>("market.json", { offers: {}, paid: {}, staged: {} });
@@ -126,6 +134,14 @@ export function saveEscrow(nftId: string, escrow: Escrow) {
   });
 }
 
+/** Forgets an escrow that is no longer on the ledger, because the fan took the payment back. */
+export function clearEscrow(nftId: string) {
+  const state = market();
+  const escrows = { ...state.escrows };
+  delete escrows[nftId];
+  write("market.json", { ...state, escrows });
+}
+
 export const holderOf = (nftId: string) => market().holders?.[nftId] ?? null;
 
 export function recordHolder(nftId: string, address: string) {
@@ -179,6 +195,7 @@ export type Activity = {
     | "sent"
     | "claimed"
     | "released"
+    | "refunded"
     | "burned";
   nftId: string;
   eventId: string;
@@ -210,3 +227,10 @@ export function logActivity(...items: Omit<Activity, "at">[]) {
 
 /** Every payment still locked in an escrow, by ticket id. */
 export const pendingEscrows = () => market().escrows ?? {};
+
+/** Demo only: whether new purchases get a short refund deadline. */
+export const quickRefunds = () => market().quickRefunds === true;
+
+export function setQuickRefunds(on: boolean) {
+  write("market.json", { ...market(), quickRefunds: on });
+}

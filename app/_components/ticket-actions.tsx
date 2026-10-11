@@ -5,11 +5,13 @@ import { Button } from "@/components/lime/ui/button";
 import {
   Field,
   FieldDescription,
+  FieldError,
   FieldLabel,
 } from "@/components/lime/ui/field";
 import { Input } from "@/components/lime/ui/input";
 import { Status } from "@/components/lime/ui/status";
 import { formatAmount } from "@/components/lime/ui/amount";
+import { RESALE_CAP, resaleCap } from "@/lib/fairseat/rules";
 import { offerHeldTicket, withdrawOffer, type ActionResult } from "../actions";
 
 // What a holder can do with an open ticket: list it for sale, send it to a friend, or take the offer back.
@@ -45,6 +47,9 @@ export function TicketActions({
 
   const asking = Number(price);
   const keeps = asking > 0 ? asking * (1 - cut) : 0;
+  // The server checks the cap again against the live price when the ticket is listed.
+  const cap = resaleCap(worth);
+  const over = asking > cap;
   const problem = error && (
     <p role="alert" className="text-sm leading-normal text-danger-text">
       {error}
@@ -105,12 +110,13 @@ export function TicketActions({
   return (
     <div className="flex flex-col gap-4">
       <div className="max-w-xs">
-        <Field name="price">
+        <Field name="price" invalid={over}>
           <FieldLabel>Your price in dollars</FieldLabel>
           <Input
             type="number"
             inputMode="decimal"
             min="0.01"
+            max={cap}
             step="0.01"
             value={price}
             onChange={(event) => setPrice(event.target.value)}
@@ -120,12 +126,21 @@ export function TicketActions({
               ? `You get ${formatAmount(keeps)}. The organizer keeps ${Math.round(cut * 100)}% of every resale.`
               : "Enter the price you want."}
           </FieldDescription>
+          {over ? (
+            <FieldError match>
+              {`The most you can ask is ${formatAmount(cap)}.`}
+            </FieldError>
+          ) : (
+            <FieldDescription>
+              {`The most you can ask is ${formatAmount(cap)}, ${Math.round(RESALE_CAP * 100)}% of today's price.`}
+            </FieldDescription>
+          )}
         </Field>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <Button
           pending={busy === "sell"}
-          disabled={!(asking > 0) || busy !== null}
+          disabled={!(asking > 0) || over || busy !== null}
           onClick={() => run("sell", () => offerHeldTicket(nftId, asking))}
         >
           List for sale
