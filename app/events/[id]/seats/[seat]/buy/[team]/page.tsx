@@ -6,7 +6,6 @@ import { Card } from "@/components/lime/ui/card";
 import { formatAmount } from "@/components/lime/ui/amount";
 import { Icon, ArrowLeft } from "@/components/lime/icon";
 import {
-  EVENTS,
   feeFor,
   formatDate,
   getSeat,
@@ -21,23 +20,6 @@ import { offerFor, soldTicket, ticketKey } from "@/lib/fairseat/store";
 import { readWallet } from "@/lib/fairseat/wallet";
 import { PageSkeleton } from "../../../../../../_components/page-skeleton";
 import { PayButton } from "../../../../../../_components/pay-button";
-
-export async function generateStaticParams() {
-  const all = await Promise.all(
-    EVENTS.flatMap((event) =>
-      event.seats.map(async (seat) => {
-        const config = getSide(event, seat.side);
-        const side = config && (await loadSide(config));
-        return (side?.onSale ?? []).map((outcome) => ({
-          id: event.id,
-          seat: seat.id,
-          team: outcome.slug,
-        }));
-      }),
-    ),
-  );
-  return all.flat();
-}
 
 function Row({
   label,

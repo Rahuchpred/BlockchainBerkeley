@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import {
   getSeat,
   getSide,
@@ -32,6 +33,8 @@ export type LiveSide = Side & {
 };
 
 export async function loadSide(side: Side): Promise<LiveSide> {
+  // Odds are read when a fan asks for the page, never baked in when the site is built.
+  await connection();
   const market = await getMarket(side.market);
   // A result staged for the demo stands in for the market settling, which no market has done yet.
   const staged = stagedResult(side.market);
