@@ -14,7 +14,7 @@ import {
 } from "@/components/lime/ui/table";
 import { formatAmount } from "@/components/lime/ui/amount";
 import { Icon, ArrowLeft } from "@/components/lime/icon";
-import { percent, seatLabel } from "@/lib/fairseat/data";
+import { conditionOf, percent, seatLabel } from "@/lib/fairseat/data";
 import { findEvent } from "@/lib/fairseat/events";
 import { getHistory } from "@/lib/fairseat/gemini";
 import { loadSides } from "@/lib/fairseat/live";
@@ -22,6 +22,7 @@ import { allActivity } from "@/lib/fairseat/store";
 import { describe, formatTime } from "@/lib/fairseat/story";
 import { RESALE_RATE, txUrl } from "@/lib/fairseat/xrpl";
 import { MarketChart } from "../../../_components/market-chart";
+import { LiveRefresh, LiveValue } from "../../../_components/live";
 import { PageSkeleton } from "../../../_components/page-skeleton";
 import { TeamMark } from "../../../_components/team-mark";
 
@@ -98,8 +99,7 @@ async function MarketContent({
         <div className="flex flex-col gap-1">
           <h1 className="title-page">{`${event.title} market`}</h1>
           <p className="max-w-xl text-base leading-normal text-fg-2">
-            Each team&apos;s chance of making the final, from Gemini&apos;s
-            prediction market. These chances set every ticket price.
+            {`Each team's chance of ${conditionOf(sides[0]).making}, from Gemini's prediction market. These chances set every ticket price.`}
           </p>
         </div>
       </header>
@@ -131,7 +131,7 @@ async function MarketContent({
           <h2 className="text-lg font-semibold">{side.name}</h2>
           {side.settled ? (
             <p className="text-base leading-normal text-fg-2">
-              {side.settled} made the final. This side has settled.
+              {`${side.settled} ${conditionOf(side).made}. This side has settled.`}
             </p>
           ) : (
             <>
@@ -150,7 +150,8 @@ async function MarketContent({
                   <TableRow>
                     <TableHead>Team</TableHead>
                     <TableHead className="text-end">Chance</TableHead>
-                    <TableHead>Today</TableHead>
+                    {/* On a phone the change is left out so the price stays on screen. */}
+                    <TableHead className="max-sm:hidden">Today</TableHead>
                     <TableHead className="text-end">Tickets from</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -171,14 +172,14 @@ async function MarketContent({
                           {team.team}
                         </span>
                       </TableCell>
-                      <TableCell className="text-end font-mono tabular-nums">
-                        {percent(team.chance)}
+                      <TableCell className="text-end tabular-nums">
+                        <LiveValue kind="percent" value={team.chance} />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="max-sm:hidden">
                         <Change points={team.change} />
                       </TableCell>
-                      <TableCell className="text-end font-mono tabular-nums">
-                        {formatAmount(team.from)}
+                      <TableCell className="text-end tabular-nums">
+                        <LiveValue value={team.from} />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -231,13 +232,7 @@ async function MarketContent({
                           variant="link"
                           size="sm"
                           nativeButton={false}
-                          render={
-                            <a
-                              href={txUrl(step.hash)}
-                              target="_blank"
-                              rel="noreferrer"
-                            />
-                          }
+                          render={<Link href={txUrl(step.hash)} />}
                         >
                           Transaction
                         </Button>
@@ -258,8 +253,11 @@ export default function MarketPage({
   params,
 }: PageProps<"/events/[id]/market">) {
   return (
-    <Suspense fallback={<PageSkeleton />}>
-      <MarketContent params={params} />
-    </Suspense>
+    <>
+      <LiveRefresh />
+      <Suspense fallback={<PageSkeleton />}>
+        <MarketContent params={params} />
+      </Suspense>
+    </>
   );
 }

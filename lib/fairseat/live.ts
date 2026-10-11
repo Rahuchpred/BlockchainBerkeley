@@ -1,5 +1,6 @@
 import { connection } from "next/server";
 import {
+  WATCHING,
   getSeat,
   getSide,
   priceFor,
@@ -71,6 +72,46 @@ export async function loadSide(side: Side): Promise<LiveSide> {
 
 export const loadSides = (event: FairEvent) =>
   Promise.all(event.sides.map(loadSide));
+
+/** How many teams need a price before a watched market's odds mean anything. */
+const WATCH_MIN = 3;
+
+export type WatchedMarket = {
+  ticker: string;
+  title: string;
+  /** Why no tickets are sold on this market. */
+  reason: string;
+  /** The priced teams, likeliest first. Empty when too few teams have a price. */
+  outcomes: LiveOutcome[];
+};
+
+/** The markets Fairseat watches but does not sell on. One that fails to load or has settled is left out. */
+export async function loadWatched(): Promise<WatchedMarket[]> {
+  await connection();
+  const watched = await Promise.all(
+    WATCHING.map(async ({ market: ticker, reason }) => {
+      const market = await getMarket(ticker).catch(() => null);
+      if (!market || market.settled) return null;
+      const priced = market.outcomes.filter(
+        (outcome) => !outcome.eliminated && outcome.chance > 0,
+      );
+      return {
+        ticker,
+        title: market.title,
+        reason,
+        outcomes:
+          priced.length < WATCH_MIN
+            ? []
+            : priced.map((outcome, index) => ({
+                ...outcome,
+                slug: slug(outcome.team),
+                tone: index < TONES ? index + 1 : 0,
+              })),
+      };
+    }),
+  );
+  return watched.filter((market) => market !== null);
+}
 
 /** The cheapest ticket still on sale across an event's seats. */
 export function fromPrice(event: FairEvent, sides: LiveSide[]) {

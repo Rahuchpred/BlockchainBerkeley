@@ -2,15 +2,14 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
-import { TeamMark } from "../../_components/team-mark";
 import { Button } from "@/components/lime/ui/button";
-import { Card, CardDescription, CardTitle } from "@/components/lime/ui/card";
 import { formatAmount } from "@/components/lime/ui/amount";
 import { Icon, ArrowLeft } from "@/components/lime/icon";
-import { formatDate, percent, placeOf, seatLabel } from "@/lib/fairseat/data";
+import { conditionOf, formatDate, percent, placeOf } from "@/lib/fairseat/data";
 import { findEvent } from "@/lib/fairseat/events";
 import { getHistory } from "@/lib/fairseat/gemini";
 import { viewTicket } from "@/lib/fairseat/live";
+import { formatDeadline, refundAfterFor } from "@/lib/fairseat/rules";
 import { readWallet } from "@/lib/fairseat/wallet";
 import {
   activityFor,
@@ -18,23 +17,20 @@ import {
   offerFor,
   paidFor,
 } from "@/lib/fairseat/store";
-import { RESALE_RATE, listTickets, txUrl } from "@/lib/fairseat/xrpl";
+import {
+  RESALE_RATE,
+  listTickets,
+  ticketUrl,
+  txUrl,
+} from "@/lib/fairseat/xrpl";
 import { Status } from "@/components/lime/ui/status";
 import { qrShape } from "@/lib/fairseat/qr";
 import { OddsChart } from "../../_components/odds-chart";
 import { PageSkeleton } from "../../_components/page-skeleton";
-import { GatePass } from "../../_components/gate-pass";
 import { LedgerTrail } from "../../_components/ledger-trail";
+import { RefundButton } from "../../_components/refund-button";
 import { TicketActions } from "../../_components/ticket-actions";
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between gap-3">
-      <dt className="text-fg-2">{label}</dt>
-      <dd className="font-mono tabular-nums">{value}</dd>
-    </div>
-  );
-}
+import { TicketPass } from "../../_components/ticket-pass";
 
 async function TicketPageContent({
   params,
@@ -66,7 +62,10 @@ async function TicketPageContent({
   const offer = open ? { offerId: open.offerId, price: open.price } : null;
 
   const { event, seat, outcome, status, worth } = view;
-  const gain = worth - ticket.paid;
+  const condition = conditionOf(view.side);
+  // A locked payment can be taken back once its deadline passes, if it was never released.
+  const now = new Date();
+  const refundAfter = locked && refundAfterFor(locked, event.date);
   const [hours, days] =
     status === "open"
       ? await Promise.all([
@@ -81,156 +80,119 @@ async function TicketPageContent({
   ];
 
   return (
-    <>
-      <main className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 pt-4 pb-8 sm:px-6 sm:pt-8">
-        <header className="flex items-start gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Back to my tickets"
-            nativeButton={false}
-            render={<Link href="/tickets" />}
-            icon={<Icon icon={ArrowLeft} size={20} />}
-          />
-          <TeamMark image={outcome.image} team={outcome.team} size="lg" />
-          <div className="flex flex-col gap-1">
-            <h1 className="title-page">{`If ${outcome.team} make the final`}</h1>
-            <p className="text-base text-fg-2">
-              {event.title}, {formatDate(event.date)} at {event.venue}.
-            </p>
-            <p className="font-mono text-base text-fg-2">{seatLabel(seat)}</p>
-          </div>
-        </header>
-
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 pt-4 pb-8 sm:px-6 sm:pt-6">
+      <header className="flex flex-wrap items-center gap-2">
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Back to my tickets"
+          nativeButton={false}
+          render={<Link href="/tickets" />}
+          icon={<Icon icon={ArrowLeft} size={20} />}
+        />
+        <h1 className="title-page">Your ticket</h1>
         {receipt && (
-          <section className="flex flex-col gap-3 transition-[opacity,transform] duration-(--dur-slow) ease-out starting:translate-y-2 starting:opacity-0">
-            <h2 className="text-lg font-semibold">
-              {gift ? "Ticket claimed" : "Payment done"}
-            </h2>
+          <div className="ms-auto flex flex-wrap items-center gap-3 transition-opacity duration-(--dur-slow) ease-out starting:opacity-0">
             <Status
               status="done"
               label={
                 gift
-                  ? "Moved to your wallet on the XRP Ledger"
-                  : `Paid ${formatAmount(ticket.paid)}${locked ? " into escrow" : ""} on the XRP Ledger`
+                  ? "Claimed on the XRP Ledger"
+                  : `Paid ${formatAmount(ticket.paid)}${locked ? " into escrow" : ""}`
               }
             />
+            <Button
+              variant="outline"
+              size="sm"
+              nativeButton={false}
+              render={<Link href={txUrl(receipt)} />}
+            >
+              View the transaction
+            </Button>
+          </div>
+        )}
+      </header>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="flex flex-col gap-6">
+          <TicketPass
+            id={ticket.id}
+            href={ticketUrl(ticket.id)}
+            team={outcome.team}
+            condition={condition}
+            image={outcome.image}
+            tone={outcome.tone}
+            event={event.title}
+            when={formatDate(event.date)}
+            place={placeOf(event)}
+            section={seat.section}
+            row={seat.row}
+            seat={seat.seat}
+            status={status}
+            faceValue={seat.faceValue}
+            paid={ticket.paid}
+            worth={worth}
+            locked={locked?.amount ?? null}
+            cut={RESALE_RATE}
+            qr={
+              status === "live" ? qrShape(`fairseat:${ticket.id}`) : undefined
+            }
+          />
+          {status === "expired" && (
             <p className="text-sm leading-normal text-fg-2">
-              {gift
-                ? "The ticket now sits in your wallet, and only you can sell or send it."
-                : locked
-                  ? "Your payment was locked and the ticket moved to you in one step, so neither could happen without the other. The money is released to the organizer once the finalists are decided."
-                  : "The ticket and the payment changed hands in one transaction, so neither could happen without the other."}
+              {`${outcome.team} did not ${condition.make}, so this ticket has expired.`}
             </p>
-            <div>
-              <Button
-                variant="outline"
-                size="sm"
-                nativeButton={false}
-                render={
-                  <a href={txUrl(receipt)} target="_blank" rel="noreferrer" />
-                }
-              >
-                View the transaction
-              </Button>
-            </div>
-          </section>
-        )}
-
-        {status === "live" && (
-          <section className="flex flex-col gap-3">
-            <h2 className="text-lg font-semibold">Your seat</h2>
-            <p className="text-sm leading-normal text-fg-2">
-              {outcome.team} made the final, so this ticket is now the seat.
-              Show this pass at the gate.
-            </p>
-            <GatePass
-              team={outcome.team}
-              image={outcome.image}
-              event={event.title}
-              when={formatDate(event.date)}
-              place={placeOf(event)}
-              section={seat.section}
-              row={seat.row}
-              seat={seat.seat}
-              qr={qrShape(`fairseat:${ticket.id}`)}
-              code={`${ticket.id.slice(0, 8)}...${ticket.id.slice(-8)}`}
-            />
-          </section>
-        )}
-
-        {status === "expired" && (
-          <p className="text-base leading-normal text-fg-2">
-            {outcome.team} did not make the final, so this ticket has expired.
-            The seat went to the fan holding the ticket for the team that did.
-          </p>
-        )}
-
-        {status === "open" && (
-          <section className="flex flex-col gap-3">
-            <h2 className="text-lg font-semibold">Worth now</h2>
-            <p className="font-mono text-3xl font-semibold tracking-tight tabular-nums">
-              {formatAmount(worth)}
-            </p>
-            <p className="text-sm leading-normal text-fg-2">
-              {outcome.team} hold {percent(outcome.share)} of this seat. The
-              line is the market&apos;s price for them making the final.
-            </p>
-            <OddsChart
-              tone={outcome.tone}
-              label={`${outcome.team}'s chance of making the final`}
-              ranges={ranges}
-            />
-          </section>
-        )}
-
-        {status === "open" && (
-          <section className="flex flex-col gap-3">
-            <h2 className="text-lg font-semibold">Sell or send</h2>
-            <TicketActions
-              nftId={ticket.id}
-              worth={worth}
-              cut={RESALE_RATE}
-              offer={offer}
-            />
-          </section>
-        )}
-
-        <section className="flex flex-col gap-3">
-          <h2 className="text-lg font-semibold">Your position</h2>
-          <Card variant="surface">
-            <div className="flex flex-col gap-1">
-              <CardTitle>What you paid and what it is worth</CardTitle>
-              <CardDescription>
-                The full seat price is {formatAmount(seat.faceValue)}.
-              </CardDescription>
-            </div>
-            <dl className="flex flex-col gap-2 text-sm">
-              <Row label="You paid" value={formatAmount(ticket.paid)} />
-              {locked && (
-                <Row
-                  label="Held in escrow on the ledger"
-                  value={formatAmount(locked.amount)}
-                />
-              )}
-              <Row label="Worth now" value={formatAmount(worth)} />
-              <Row
-                label="Gain or loss"
-                value={formatAmount(gain, { signed: true })}
+          )}
+          {locked && refundAfter && (
+            <section className="flex flex-col gap-3">
+              <h2 className="text-lg font-semibold">Your payment</h2>
+              <p className="max-w-xl text-sm leading-normal text-fg-2">
+                {`${formatAmount(locked.amount)} is held in escrow until ${condition.decided}. If it is never released, you can take it back from ${formatDeadline(refundAfter, now)}. Taking it back gives up the ticket.`}
+              </p>
+              <RefundButton
+                nftId={ticket.id}
+                after={refundAfter.toISOString()}
+                ready={now >= refundAfter}
+                leave
               />
-            </dl>
-          </Card>
-        </section>
-        <section className="flex flex-col gap-3">
-          <h2 className="text-lg font-semibold">On the ledger</h2>
-          <p className="max-w-xl text-sm leading-normal text-fg-2">
-            Every step in this ticket&apos;s life is a transaction on the XRP
-            Ledger that anyone can check.
-          </p>
-          <LedgerTrail steps={activityFor(ticket.id)} />
-        </section>
-      </main>
-    </>
+            </section>
+          )}
+          {status === "open" && (
+            <section className="flex flex-col gap-3">
+              <h2 className="text-lg font-semibold">Sell or send</h2>
+              <TicketActions
+                nftId={ticket.id}
+                worth={worth}
+                cut={RESALE_RATE}
+                offer={offer}
+              />
+            </section>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-6">
+          {status === "open" && (
+            <section className="flex flex-col gap-3 rounded-panel bg-surface p-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-3">
+                <h2 className="text-lg font-semibold">{`${outcome.team}'s chance`}</h2>
+                <p className="text-2xl font-semibold tracking-tight tabular-nums">
+                  {percent(outcome.chance)}
+                </p>
+              </div>
+              <OddsChart
+                tone={outcome.tone}
+                label={`${outcome.team}'s chance of ${condition.making}`}
+                ranges={ranges}
+              />
+            </section>
+          )}
+          <section className="flex flex-col gap-3">
+            <h2 className="text-lg font-semibold">On the ledger</h2>
+            <LedgerTrail steps={activityFor(ticket.id)} />
+          </section>
+        </div>
+      </div>
+    </main>
   );
 }
 

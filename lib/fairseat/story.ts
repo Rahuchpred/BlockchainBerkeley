@@ -10,7 +10,18 @@ const timeFormat = new Intl.DateTimeFormat("en-US", {
   minute: "2-digit",
 });
 
+const yearFormat = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
 export const formatTime = (iso: string) => timeFormat.format(new Date(iso));
+
+/** A time that may be in another year, such as a refund deadline, with its year. */
+export const formatFarTime = (iso: string) => yearFormat.format(new Date(iso));
 
 /** An account, shortened to its first and last characters. */
 export const shortAddress = (address: string) =>
@@ -61,12 +72,24 @@ export function describe(
     case "released":
       return {
         title: `${amount} released to the organizer`,
-        detail: "The finalists were decided, so the escrow was opened.",
+        detail: "The result was decided, so the escrow was opened.",
+      };
+    case "refunded":
+      return {
+        title: `${amount} taken back by the fan`,
+        detail:
+          "The escrow was never released and its deadline passed, so the fan undid it.",
       };
     case "burned":
+      if (step.returned)
+        return {
+          title: "Handed back and burned",
+          detail:
+            "The fan took the payment back, so the ticket was removed and the seat went back on sale.",
+        };
       return {
         title: "Expired and burned",
-        detail: "Its team missed the final, so the ticket was removed.",
+        detail: "Its team missed out, so the ticket was removed.",
       };
   }
 }

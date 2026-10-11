@@ -17,7 +17,11 @@ export type Session =
   | { kind: "house"; name: string };
 
 /** Where each kind of account lands after logging in. */
-export const HOME = { buyer: "/", team: "/organizer/nba", house: "/organizer" };
+export const HOME = {
+  buyer: "/events",
+  team: "/organizer/nba",
+  house: "/organizer",
+};
 
 const teamNamed = (team: string) =>
   Object.keys(NBA_CODES).find((name) => slug(name) === team);

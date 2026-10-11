@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { formatAmount } from "@/components/lime/ui/amount";
 import {
   EVENTS,
+  conditionOf,
+  fansOf,
   formatDate,
   placeOf,
   priceFor,
@@ -11,17 +13,14 @@ import {
   type Seat,
 } from "@/lib/fairseat/data";
 import { findEvent } from "@/lib/fairseat/events";
-import {
-  holderOf,
-  releasedTickets,
-  soldTickets,
-} from "@/lib/fairseat/store";
+import { holderOf, releasedTickets, soldTickets } from "@/lib/fairseat/store";
 import { readWallet } from "@/lib/fairseat/wallet";
 import { Button } from "@/components/lime/ui/button";
 import Link from "next/link";
 import { fromPrice, loadSides, type LiveSide } from "@/lib/fairseat/live";
 import { SeatFinder } from "../../_components/seat-finder";
 import type { SectionInfo } from "../../_components/stadium-map";
+import { LiveRefresh } from "../../_components/live";
 import { PageSkeleton } from "../../_components/page-skeleton";
 
 export function generateStaticParams() {
@@ -29,7 +28,7 @@ export function generateStaticParams() {
 }
 
 function seatSummary(seat: Seat, side: LiveSide) {
-  if (side.settled) return `${side.settled} made the final`;
+  if (side.settled) return `${side.settled} ${conditionOf(side).made}`;
   if (side.onSale.length === 0) return "No tickets on sale yet";
   const prices = side.onSale.map((outcome) => priceFor(seat, outcome.share));
   return `${side.onSale.length} teams, ${formatAmount(Math.min(...prices))} to ${formatAmount(Math.max(...prices))}`;
@@ -50,6 +49,10 @@ async function EventPageContent({
 
   const sides = await loadSides(event);
   const from = fromPrice(event, sides);
+  /** Its clubs release their own seats, and none has yet. */
+  const unreleased = Boolean(event.ringPrices) && event.seats.length === 0;
+  // Set when the seats are decided by something other than a place in this event's own final.
+  const own = sides[0]?.condition;
   const sideOf = (seat: Seat) => sides.find((side) => side.id === seat.side);
 
   const wallet = await readWallet();
@@ -112,11 +115,20 @@ async function EventPageContent({
           </div>
         )}
         <p className="max-w-xl text-sm leading-normal text-fg-2">
-          Nobody knows the finalists yet, so each seat has one ticket per team.
-          {event.ringPrices && event.seats.length === 0
-            ? " No team has released tickets yet."
+          {/* Once every side is decided there is nothing left to say about not knowing. */}
+          {(from !== null || unreleased) &&
+            (own
+              ? `Nobody knows which team ${own.makes} yet, so each seat has one ticket per team.`
+              : "Nobody knows the finalists yet, so each seat has one ticket per team.")}
+          {from !== null &&
+            sides.length > 1 &&
+            ` The stadium is split in half: the ${sides[0].name} and the ${sides[1].name} each send one team to the final, so each half has its own teams and its own odds.`}
+          {unreleased
+            ? " No club has released tickets yet."
             : from === null
-            ? " The finalists are decided, so the tickets for them are now real seats."
+            ? own
+              ? `${own.decided.replace(/^t/, "T")}, so that team's tickets are now real seats.`
+              : "The finalists are decided, so the tickets for them are now real seats."
             : ` Tickets start at ${formatAmount(from)}.`}
         </p>
         <div>
@@ -135,6 +147,7 @@ async function EventPageContent({
         sides={sides.map((side) => ({
           id: side.id,
           name: side.name,
+          fans: fansOf(side),
           shares: side.onSale,
         }))}
         seats={seats}
@@ -147,6 +160,7 @@ async function EventPageContent({
 export default function EventPage({ params }: PageProps<"/events/[id]">) {
   return (
     <>
+      <LiveRefresh />
       <Suspense fallback={<PageSkeleton />}>
         <EventPageContent params={params} />
       </Suspense>

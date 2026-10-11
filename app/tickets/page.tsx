@@ -8,6 +8,7 @@ import {
 } from "@/components/lime/ui/empty";
 import {
   BUYER_NAME,
+  conditionOf,
   formatDate,
   placeOf,
   seatLabel,
@@ -17,6 +18,7 @@ import { viewTicket } from "@/lib/fairseat/live";
 import { qrShape } from "@/lib/fairseat/qr";
 import { readWallet } from "@/lib/fairseat/wallet";
 import { listTickets } from "@/lib/fairseat/xrpl";
+import { LiveRefresh } from "../_components/live";
 import { PageSkeleton } from "../_components/page-skeleton";
 import { TicketWallet, type WalletTicket } from "../_components/ticket-wallet";
 import { WalletChip } from "../_components/wallet-chip";
@@ -46,6 +48,7 @@ async function Wallet() {
         id: view.ticket.id,
         status: view.status,
         team: view.outcome.team,
+        condition: conditionOf(view.side),
         image: view.outcome.image,
         event: view.event.title,
         date: formatDate(view.event.date),
@@ -84,6 +87,7 @@ async function Wallet() {
 export default function TicketsPage() {
   return (
     <>
+      <LiveRefresh />
       <Suspense fallback={<PageSkeleton />}>
         <Wallet />
       </Suspense>

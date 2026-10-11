@@ -4,8 +4,10 @@ import {
   Wallet,
   convertHexToString,
   convertStringToHex,
+  encodeAccountID,
   getNFTokenID,
   hashes,
+  isValidClassicAddress,
   type SubmittableTransaction,
   type Transaction,
   type TransactionMetadata,
@@ -44,8 +46,15 @@ const BATCH_LIMIT = 8;
 /** Seconds between 1970 and 2000, where the ledger's clock starts. */
 const RIPPLE_EPOCH = 946684800;
 
-export const txUrl = (hash: string) => `${EXPLORER}/transactions/${hash}`;
-export const accountUrl = (address: string) =>
+// Proof links open pages inside the app, which read the ledger through our own connection.
+export const txUrl = (hash: string) => `/proof/${hash}`;
+export const accountUrl = (address: string) => `/proof/account/${address}`;
+/** A ticket's proof is the gate check: it asks the ledger who holds it and whether it gets in. */
+export const ticketUrl = (nftId: string) => `/gate?code=${nftId}`;
+// The public explorer, kept as a second opinion.
+export const explorerTxUrl = (hash: string) =>
+  `${EXPLORER}/transactions/${hash}`;
+export const explorerAccountUrl = (address: string) =>
   `${EXPLORER}/accounts/${address}`;
 
 // One connection is kept open and shared. Opening a new one for every read gets the app turned
@@ -422,54 +431,160 @@ export function buyTicket(
   record: TicketRecord,
   refundAfter: Date,
 ): Promise<Purchase> {
+  return buyTickets(fanSeed, [record], refundAfter).then(([bought]) => bought);
+}
+
+/** The most tickets one Batch can pay for: each takes an escrow and an accepted offer. */
+export const GROUP_LIMIT = BATCH_LIMIT / 2;
+
+/** The escrows an account has locked, each with the lock on it and the entry's id on the ledger. */
+async function lockedEscrows(client: Client, owner: string) {
+  const found: { index: string; Condition?: string; PreviousTxnID?: string }[] =
+    [];
+  let marker: unknown;
+  do {
+    const page = await client.request({
+      command: "account_objects",
+      account: owner,
+      type: "escrow",
+      ledger_index: "validated",
+      limit: 400,
+      marker,
+    });
+    for (const entry of page.result.account_objects as unknown as (Fields & {
+      index: string;
+    })[])
+      if (entry.Account === owner)
+        found.push({
+          index: entry.index,
+          Condition: text(entry.Condition) ?? undefined,
+          PreviousTxnID: text(entry.PreviousTxnID) ?? undefined,
+        });
+    marker = page.result.marker;
+  } while (marker);
+  return found;
+}
+
+/**
+ * Sells up to four new tickets to one fan, paid for together. The organizer mints each with an
+ * offer only this fan can take. Then, in one Batch, the fan locks each price in its own escrow and
+ * takes each ticket: all of it happens or none of it does. The purchases come back in the order asked.
+ */
+export function buyTickets(
+  fanSeed: string,
+  records: TicketRecord[],
+  refundAfter: Date,
+): Promise<Purchase[]> {
   return withClient(async (client) => {
+    if (records.length < 1 || records.length > GROUP_LIMIT)
+      throw new Error(`One payment covers 1 to ${GROUP_LIMIT} tickets`);
     const fan = Wallet.fromSeed(fanSeed);
     const house = organizer();
-
-    const mint = await client.submitAndWait(
-      {
-        TransactionType: "NFTokenMint",
-        Account: house.address,
-        NFTokenTaxon: 0,
-        Flags: TRANSFERABLE | BURNABLE,
-        TransferFee: RESALE_CUT,
-        URI: encode(record),
-        Amount: "0",
-        Destination: fan.address,
-      },
-      { wallet: house },
-    );
-    assertOk(mint.result.meta, "Minting the ticket");
-    const meta = mint.result.meta as TransactionMetadata & {
-      offer_id?: string;
-    };
-    const nftId = getNFTokenID(meta);
-    if (!nftId || !meta.offer_id)
-      throw new Error("The ledger did not return a ticket id");
+    const minted: { nftId: string; offerId: string; mintHash: string }[] = [];
 
     try {
-      const paid = await payAndTake(
-        client,
-        fan,
-        house.address,
-        nftId,
-        meta.offer_id,
-        record.paid,
-        refundAfter,
-      );
-      return { nftId, mintHash: mint.result.hash, ...paid };
-    } catch (error) {
-      // The fan did not pay, so the ticket must not be left waiting for them.
-      await client
-        .submitAndWait(
+      for (const record of records) {
+        const mint = await client.submitAndWait(
           {
-            TransactionType: "NFTokenBurn",
+            TransactionType: "NFTokenMint",
             Account: house.address,
-            NFTokenID: nftId,
+            NFTokenTaxon: 0,
+            Flags: TRANSFERABLE | BURNABLE,
+            TransferFee: RESALE_CUT,
+            URI: encode(record),
+            Amount: "0",
+            Destination: fan.address,
           },
           { wallet: house },
-        )
-        .catch(() => undefined);
+        );
+        assertOk(mint.result.meta, "Minting the ticket");
+        const meta = mint.result.meta as TransactionMetadata & {
+          offer_id?: string;
+        };
+        const nftId = getNFTokenID(meta);
+        if (!nftId || !meta.offer_id)
+          throw new Error("The ledger did not return a ticket id");
+        minted.push({
+          nftId,
+          offerId: meta.offer_id,
+          mintHash: mint.result.hash,
+        });
+      }
+
+      const what =
+        records.length === 1
+          ? "Paying for the ticket"
+          : "Paying for the tickets";
+      const paid = await submitTogether(
+        client,
+        fan,
+        minted.flatMap((ticket, at) => [
+          {
+            TransactionType: "EscrowCreate",
+            Account: fan.address,
+            Destination: house.address,
+            Amount: dollars(records[at].paid),
+            Condition: escrowLock(ticket.nftId).condition,
+            CancelAfter:
+              Math.floor(refundAfter.getTime() / 1000) - RIPPLE_EPOCH,
+          },
+          {
+            TransactionType: "NFTokenAcceptOffer",
+            Account: fan.address,
+            NFTokenSellOffer: ticket.offerId,
+          },
+        ]),
+        what,
+      );
+
+      // A Batch is recorded as a success even when its parts were turned away, so the escrows are
+      // read back from the ledger. One missing means nothing in the Batch happened.
+      const first = (paid.tx_json.Sequence ?? 0) + 1;
+      const locked = await lockedEscrows(client, fan.address);
+      const purchases: Purchase[] = [];
+      for (const [at, ticket] of minted.entries()) {
+        const { condition } = escrowLock(ticket.nftId);
+        const entry = locked.find((item) => item.Condition === condition);
+        if (!entry) throw new Error(`${what} failed on the ledger`);
+        // Each part of the Batch takes the next number after the Batch's own, so this ticket's
+        // escrow should hold the one two further on than the last. The entry's id says if it does.
+        let sequence = first + 2 * at;
+        if (hashes.hashEscrow(fan.address, sequence) !== entry.index) {
+          const made = entry.PreviousTxnID
+            ? await client
+                .request({ command: "tx", transaction: entry.PreviousTxnID })
+                .catch(() => null)
+            : null;
+          const real = (made?.result.tx_json as Fields | undefined)?.Sequence;
+          if (
+            typeof real !== "number" ||
+            hashes.hashEscrow(fan.address, real) !== entry.index
+          )
+            throw new Error("The ledger did not say where the payment is held");
+          sequence = real;
+        }
+        purchases.push({
+          nftId: ticket.nftId,
+          hash: paid.hash,
+          mintHash: ticket.mintHash,
+          escrow: { owner: fan.address, sequence },
+        });
+      }
+      return purchases;
+    } catch (error) {
+      // The fan did not pay, so no ticket must be left waiting for them. A ticket the fan did take
+      // is theirs and is left alone: the organizer names no owner here, so that burn is refused.
+      for (const ticket of minted)
+        await client
+          .submitAndWait(
+            {
+              TransactionType: "NFTokenBurn",
+              Account: house.address,
+              NFTokenID: ticket.nftId,
+            },
+            { wallet: house },
+          )
+          .catch(() => undefined);
       throw error;
     }
   });
@@ -492,6 +607,48 @@ async function heldItems(client: Client, address: string) {
       held.push({ nftId: nft.NFTokenID, uri: nft.URI });
     marker = page.result.marker;
   } while (marker);
+  return held;
+}
+
+/** Whether an escrow is on the ledger now. One that was released or taken back is not. */
+async function escrowExists(
+  client: Client,
+  escrow: { owner: string; sequence: number },
+) {
+  try {
+    await client.request({
+      command: "ledger_entry",
+      escrow: { owner: escrow.owner, seq: escrow.sequence },
+      ledger_index: "validated",
+    });
+    return true;
+  } catch (error) {
+    const code = (error as { data?: { error?: string } }).data?.error;
+    if (code === "entryNotFound") return false;
+    throw error;
+  }
+}
+
+/** The ids of every NFT an account holds now. An account that is not on the ledger holds none. */
+async function nftsIn(client: Client, holder: string) {
+  const held = new Set<string>();
+  let marker: unknown;
+  try {
+    do {
+      const page = await client.request({
+        command: "account_nfts",
+        account: holder,
+        ledger_index: "validated",
+        limit: 400,
+        marker,
+      });
+      for (const nft of page.result.account_nfts) held.add(nft.NFTokenID);
+      marker = page.result.marker;
+    } while (marker);
+  } catch (error) {
+    const code = (error as { data?: { error?: string } }).data?.error;
+    if (code !== "actNotFound") throw error;
+  }
   return held;
 }
 
@@ -540,6 +697,33 @@ export function releaseTickets(
     if (released.length !== records.length)
       throw new Error("The ledger did not return every released ticket");
     return released;
+  });
+}
+
+/**
+ * Gives a fan back a payment that was never released. The ledger allows it only to be undone once
+ * the escrow's deadline has passed, and only while the escrow still exists.
+ */
+export function refundEscrow(
+  fanSeed: string,
+  escrow: { owner: string; sequence: number },
+) {
+  return withClient(async (client) => {
+    const fan = Wallet.fromSeed(fanSeed);
+    const cancel = await client.submitAndWait(
+      {
+        TransactionType: "EscrowCancel",
+        Account: fan.address,
+        Owner: escrow.owner,
+        OfferSequence: escrow.sequence,
+      },
+      { wallet: fan },
+    );
+    assertOk(cancel.result.meta, "Taking the money back");
+    // The result is not taken on trust: the escrow must be gone from the ledger.
+    if (await escrowExists(client, escrow))
+      throw new Error("The ledger still holds the payment");
+    return { hash: cancel.result.hash };
   });
 }
 
@@ -603,6 +787,30 @@ export function buyReleasedTicket(
   });
 }
 
+/**
+ * Removes a ticket from whoever holds it. The organizer can do this because every ticket is minted
+ * burnable. The holder's wallet is read back to confirm it is gone. A ticket a club released is
+ * burned by that club's own wallet, so name the club.
+ */
+export function burnTicket(nftId: string, holder: string, team?: string) {
+  return withClient(async (client) => {
+    const house = team ? teamOrganizer(team) : organizer();
+    const burn = await client.submitAndWait(
+      {
+        TransactionType: "NFTokenBurn",
+        Account: house.address,
+        Owner: holder,
+        NFTokenID: nftId,
+      },
+      { wallet: house },
+    );
+    assertOk(burn.result.meta, "Removing the ticket");
+    if ((await nftsIn(client, holder)).has(nftId))
+      throw new Error("The ledger still holds the ticket");
+    return { hash: burn.result.hash };
+  });
+}
+
 export type Settlement = {
   nftId: string;
   /** The escrow holding what was paid for this ticket, if it has not been released yet. */
@@ -612,63 +820,150 @@ export type Settlement = {
 };
 
 /**
+ * What the ledger shows a settlement did to one thing. "done": it was there before and is gone
+ * after. "gone": it was not there to act on. "failed": it is still there.
+ */
+export type SettleOutcome = "done" | "gone" | "failed";
+
+/** What settling did for one ticket, read back from the ledger. Null where nothing was asked. */
+export type Settled = {
+  nftId: string;
+  release: SettleOutcome | null;
+  burn: SettleOutcome | null;
+  /** The transaction that released the payment, and the one that burned the ticket. */
+  releaseHash?: string;
+  burnHash?: string;
+  /** The ledger's reason, when a part was turned away. */
+  why?: string;
+};
+
+/**
  * Settles tickets once the finalists are decided: releases each payment to the organizer and burns
- * the tickets for teams that missed out. Returns the transactions that did it. Tickets a team
- * released are settled by that team's own organizer, so name the team.
+ * the tickets for teams that missed out. A Batch is recorded as a success even when its parts were
+ * turned away, so every escrow and ticket is read from the ledger before and after. Returns what
+ * really happened to each ticket and the transactions that did it. Tickets a club released are
+ * settled by that club's own wallet, so name the club.
  */
 export function settleTickets(
   tickets: Settlement[],
   team?: string,
-): Promise<{ hashes: string[]; byTicket: Record<string, string> }> {
+): Promise<{ hashes: string[]; tickets: Settled[] }> {
   return withClient(async (client) => {
     const house = team ? teamOrganizer(team) : organizer();
-    const parts = tickets.flatMap((ticket) => [
-      ...(ticket.escrow
-        ? [
-            {
-              nftId: ticket.nftId,
-              tx: {
-                TransactionType: "EscrowFinish",
-                Account: house.address,
-                Owner: ticket.escrow.owner,
-                OfferSequence: ticket.escrow.sequence,
-                Condition: escrowLock(ticket.nftId).condition,
-                Fulfillment: escrowLock(ticket.nftId).fulfillment,
-              },
-            },
-          ]
-        : []),
-      ...(ticket.burnFrom
-        ? [
-            {
-              nftId: ticket.nftId,
-              tx: {
-                TransactionType: "NFTokenBurn",
-                Account: house.address,
-                // A ticket nobody bought is still in the organizer's own account.
-                ...(ticket.burnFrom !== house.address && {
-                  Owner: ticket.burnFrom,
-                }),
-                NFTokenID: ticket.nftId,
-              },
-            },
-          ]
-        : []),
-    ]);
-    const hashes: string[] = [];
-    const byTicket: Record<string, string> = {};
-    for (let at = 0; at < parts.length; at += BATCH_LIMIT) {
-      const chunk = parts.slice(at, at + BATCH_LIMIT);
-      const done = await submitTogether(
+    type Part = {
+      kind: "release" | "burn";
+      about: Settled;
+      from: Settlement;
+      tx: Record<string, unknown>;
+    };
+
+    /** The parts whose escrow or ticket is on the ledger right now. */
+    const present = async (parts: Part[]) => {
+      const wallets = new Map<string, Set<string>>();
+      const there: Part[] = [];
+      for (const part of parts) {
+        const { escrow, burnFrom, nftId } = part.from;
+        if (part.kind === "release") {
+          if (escrow && (await escrowExists(client, escrow))) there.push(part);
+          continue;
+        }
+        if (!burnFrom) continue;
+        if (!wallets.has(burnFrom))
+          wallets.set(burnFrom, await nftsIn(client, burnFrom));
+        if (wallets.get(burnFrom)?.has(nftId)) there.push(part);
+      }
+      return there;
+    };
+
+    const settled: Settled[] = [];
+    const asked: Part[] = [];
+    for (const ticket of tickets) {
+      const about: Settled = { nftId: ticket.nftId, release: null, burn: null };
+      settled.push(about);
+      if (ticket.escrow)
+        asked.push({
+          kind: "release",
+          about,
+          from: ticket,
+          tx: {
+            TransactionType: "EscrowFinish",
+            Account: house.address,
+            Owner: ticket.escrow.owner,
+            OfferSequence: ticket.escrow.sequence,
+            Condition: escrowLock(ticket.nftId).condition,
+            Fulfillment: escrowLock(ticket.nftId).fulfillment,
+          },
+        });
+      if (ticket.burnFrom)
+        asked.push({
+          kind: "burn",
+          about,
+          from: ticket,
+          tx: {
+            TransactionType: "NFTokenBurn",
+            Account: house.address,
+            // A ticket nobody bought is still in the club's own account.
+            ...(ticket.burnFrom !== house.address && {
+              Owner: ticket.burnFrom,
+            }),
+            NFTokenID: ticket.nftId,
+          },
+        });
+    }
+
+    // Only what is on the ledger is sent. One part with nothing to act on would undo the Batch.
+    const parts = await present(asked);
+    for (const part of asked)
+      if (!parts.includes(part)) part.about[part.kind] = "gone";
+
+    const mark = (part: Part, outcome: SettleOutcome, hash?: string) => {
+      part.about[part.kind] = outcome;
+      if (hash) part.about[`${part.kind}Hash`] = hash;
+    };
+    const submit = (list: Part[]) =>
+      submitTogether(
         client,
         house,
-        chunk.map((part) => part.tx),
+        list.map((part) => part.tx),
         "Settling the tickets",
+      ).then(
+        (done) => ({ hash: done.hash as string | null, why: undefined }),
+        (error: unknown) => ({
+          hash: null,
+          why: error instanceof Error ? error.message : String(error),
+        }),
       );
-      hashes.push(done.hash);
-      for (const part of chunk) byTicket[part.nftId] = done.hash;
+
+    const hashes: string[] = [];
+    for (let at = 0; at < parts.length; at += BATCH_LIMIT) {
+      const chunk = parts.slice(at, at + BATCH_LIMIT);
+      const together = await submit(chunk);
+      const left = await present(chunk);
+      if (together.hash && left.length < chunk.length)
+        hashes.push(together.hash);
+      for (const part of chunk)
+        if (!left.includes(part))
+          mark(part, "done", together.hash ?? undefined);
+      // Whatever the Batch left behind is sent again one at a time. A transaction on its own
+      // reports its own result, and one bad part no longer holds back the rest.
+      if (chunk.length === 1) {
+        for (const part of left) {
+          mark(part, "failed");
+          part.about.why = together.why;
+        }
+        continue;
+      }
+      for (const part of left) {
+        const alone = await submit([part]);
+        const still = (await present([part])).length > 0;
+        if (alone.hash && !still) hashes.push(alone.hash);
+        mark(part, still ? "failed" : "done", alone.hash ?? undefined);
+        if (still)
+          part.about.why =
+            alone.why ?? "The ledger did not apply the transaction";
+      }
     }
-    return { hashes, byTicket };
+    return { hashes, tickets: settled };
   });
 }
 
@@ -735,4 +1030,381 @@ export function cancelOffer(holderSeed: string, offerId: string) {
     assertOk(cancel.result.meta, "Withdrawing the offer");
     return { hash: cancel.result.hash };
   });
+}
+
+export type GateTicket = HeldTicket & {
+  /** The account the ticket sits in right now. */
+  holder: string;
+};
+
+/** What the ledger says about a ticket code. A ticket that is gone was burned or never existed. */
+export type GateLookup =
+  | { found: true; ticket: GateTicket }
+  | { found: false; reason: "gone" | "not-ours" };
+
+/**
+ * Finds a ticket on the ledger for the gate. The public server cannot look a ticket up by its id
+ * alone, so this reads the account it was last seen in, then the organizer's own.
+ */
+export function findTicket(
+  nftId: string,
+  lastSeen: string | null,
+): Promise<GateLookup> {
+  return withClient(async (client) => {
+    const makers = [organizer().address, issuer().address];
+    for (const account of new Set([lastSeen ?? makers[0], makers[0]])) {
+      let marker: unknown;
+      do {
+        const page = await client.request({
+          command: "account_nfts",
+          account,
+          limit: 400,
+          marker,
+        });
+        const nft = page.result.account_nfts.find(
+          (item) => item.NFTokenID === nftId,
+        );
+        if (nft) {
+          const record = makers.includes(nft.Issuer) ? decode(nft.URI) : null;
+          return record
+            ? { found: true, ticket: { ...record, nftId, holder: account } }
+            : { found: false, reason: "not-ours" };
+        }
+        marker = page.result.marker;
+      } while (marker);
+    }
+    // A ticket's id carries the account that minted it, after the flags and the resale cut.
+    const maker = encodeAccountID(Buffer.from(nftId.slice(8, 48), "hex"));
+    return {
+      found: false,
+      reason: makers.includes(maker) ? "gone" : "not-ours",
+    };
+  });
+}
+
+/** The credential the issuer gives the organizer once an event of theirs passes the page check. */
+const VERIFIED_ORGANIZER = convertStringToHex("FairseatVerifiedOrganizer");
+/** Set on a credential once its subject has accepted it. */
+const ACCEPTED = 0x00010000;
+/** A credential's URI holds at most this many bytes. */
+const URI_LIMIT = 256;
+
+type CredentialEntry = {
+  LedgerEntryType: string;
+  Issuer?: string;
+  CredentialType?: string;
+  Flags?: number;
+  URI?: string;
+  PreviousTxnID?: string;
+};
+
+async function readCredential(client: Client) {
+  let marker: unknown;
+  do {
+    const page = await client.request({
+      command: "account_objects",
+      account: organizer().address,
+      type: "credential",
+      limit: 400,
+      marker,
+    });
+    const entry = (page.result.account_objects as CredentialEntry[]).find(
+      (item) =>
+        item.LedgerEntryType === "Credential" &&
+        item.Issuer === issuer().address &&
+        item.CredentialType === VERIFIED_ORGANIZER,
+    );
+    if (entry) return entry;
+    marker = page.result.marker;
+  } while (marker);
+  return null;
+}
+
+export type OrganizerCredential = {
+  /** The last transaction that touched the credential: the organizer accepting it. */
+  hash: string;
+  /** The official event page it was issued for. */
+  page: string | null;
+};
+
+/** The organizer's verified credential, read from the ledger. Null until it is issued and accepted. */
+export function organizerCredential(): Promise<OrganizerCredential | null> {
+  return withClient(async (client) => {
+    const entry = await readCredential(client);
+    if (!entry?.PreviousTxnID || !((entry.Flags ?? 0) & ACCEPTED)) return null;
+    return {
+      hash: entry.PreviousTxnID,
+      page: entry.URI ? convertHexToString(entry.URI) : null,
+    };
+  });
+}
+
+/**
+ * Records on the ledger that the organizer passed the page check: the issuer issues the credential
+ * and the organizer accepts it. Done once. Returns the transactions, or null if it was already there.
+ */
+export function verifyOrganizer(
+  officialUrl: string,
+): Promise<{ hashes: string[] } | null> {
+  return withClient(async (client) => {
+    const house = organizer();
+    const existing = await readCredential(client);
+    if (existing && (existing.Flags ?? 0) & ACCEPTED) return null;
+
+    const hashes: string[] = [];
+    if (!existing) {
+      // A link too long for the ledger is cut back to its site.
+      const uri =
+        Buffer.byteLength(officialUrl) <= URI_LIMIT
+          ? officialUrl
+          : new URL(officialUrl).origin;
+      const create = await client.submitAndWait(
+        {
+          TransactionType: "CredentialCreate",
+          Account: issuer().address,
+          Subject: house.address,
+          CredentialType: VERIFIED_ORGANIZER,
+          URI: convertStringToHex(uri),
+        },
+        { wallet: issuer() },
+      );
+      assertOk(create.result.meta, "Issuing the organizer credential");
+      hashes.push(create.result.hash);
+    }
+    const accept = await client.submitAndWait(
+      {
+        TransactionType: "CredentialAccept",
+        Account: house.address,
+        Issuer: issuer().address,
+        CredentialType: VERIFIED_ORGANIZER,
+      },
+      { wallet: house },
+    );
+    assertOk(accept.result.meta, "Accepting the organizer credential");
+    hashes.push(accept.result.hash);
+    return { hashes };
+  });
+}
+
+/** Who an account is to Fairseat, so a proof can name it in plain words. */
+export function accountRole(address: string): "organizer" | "issuer" | "fan" {
+  if (address === organizer().address) return "organizer";
+  return address === issuer().address ? "issuer" : "fan";
+}
+
+/** An amount read off the ledger. XRP is written there as a string of drops, a million to one XRP. */
+export type LedgerAmount = { value: number; currency: string };
+
+function readAmount(raw: unknown): LedgerAmount | null {
+  if (typeof raw === "string")
+    return { value: Number(raw) / 1_000_000, currency: "XRP" };
+  if (raw && typeof raw === "object" && "value" in raw && "currency" in raw)
+    return { value: Number(raw.value), currency: String(raw.currency) };
+  return null;
+}
+
+/** One thing a transaction did. A Batch holds several, any other transaction is one. */
+export type ProofStep = {
+  type: string;
+  account: string;
+  amount: LedgerAmount | null;
+  /** Who the money, the ticket or the credential is for. */
+  to: string | null;
+  /** Whose escrow, ticket or credential it acts on. */
+  owner: string | null;
+  nftId: string | null;
+  offerId: string | null;
+  /** When the fan can take an escrowed payment back, if it was never released. */
+  refundAfter: string | null;
+  /** A credential's name, and the page it was issued for. */
+  credential: string | null;
+  page: string | null;
+};
+
+export type ProofTransaction = ProofStep & {
+  hash: string;
+  /** The ledger's result code: tesSUCCESS when it went through. */
+  result: string;
+  ok: boolean;
+  validated: boolean;
+  ledgerIndex: number | null;
+  closedAt: string | null;
+  /** What it cost to submit, in XRP. */
+  fee: number;
+  /** The transactions inside a Batch, in order. Empty for anything else. */
+  parts: ProofStep[];
+};
+
+type Fields = Record<string, unknown>;
+
+const text = (value: unknown) => (typeof value === "string" ? value : null);
+
+/** What an entry looked like when a transaction removed it from the ledger: a paid escrow, a taken offer. */
+function removed(meta: TransactionMetadata | undefined, type: string) {
+  for (const node of meta?.AffectedNodes ?? [])
+    if ("DeletedNode" in node && node.DeletedNode.LedgerEntryType === type)
+      return node.DeletedNode.FinalFields as Fields;
+  return null;
+}
+
+function readStep(tx: Fields, meta?: TransactionMetadata): ProofStep {
+  const type = String(tx.TransactionType);
+  // An escrow or an offer names its money when it is made. Whatever closes it only points at it.
+  const closed =
+    type === "EscrowFinish" || type === "EscrowCancel"
+      ? removed(meta, "Escrow")
+      : type === "NFTokenAcceptOffer"
+        ? removed(meta, "NFTokenOffer")
+        : null;
+  const limit = tx.LimitAmount as { issuer?: string } | undefined;
+  const offers = Array.isArray(tx.NFTokenOffers) ? tx.NFTokenOffers : [];
+  const made = meta as
+    | (TransactionMetadata & { offer_id?: string; delivered_amount?: unknown })
+    | undefined;
+  return {
+    type,
+    account: String(tx.Account),
+    amount: readAmount(
+      made?.delivered_amount ??
+        tx.Amount ??
+        tx.DeliverMax ??
+        tx.LimitAmount ??
+        closed?.Amount,
+    ),
+    to:
+      text(tx.Destination) ??
+      text(tx.Subject) ??
+      text(limit?.issuer) ??
+      (type === "NFTokenAcceptOffer" ? null : text(closed?.Destination)),
+    owner: text(tx.Owner) ?? text(tx.Issuer) ?? text(closed?.Owner),
+    nftId:
+      text(tx.NFTokenID) ??
+      text(closed?.NFTokenID) ??
+      (type === "NFTokenMint" && meta ? (getNFTokenID(meta) ?? null) : null),
+    offerId:
+      text(tx.NFTokenSellOffer) ?? text(offers[0]) ?? text(made?.offer_id),
+    refundAfter:
+      typeof tx.CancelAfter === "number"
+        ? new Date((tx.CancelAfter + RIPPLE_EPOCH) * 1000).toISOString()
+        : null,
+    credential:
+      typeof tx.CredentialType === "string"
+        ? convertHexToString(tx.CredentialType)
+        : null,
+    page:
+      type === "CredentialCreate" && typeof tx.URI === "string"
+        ? convertHexToString(tx.URI)
+        : null,
+  };
+}
+
+/** A transaction as the ledger holds it, for a proof page. Null if there is none or it cannot be read. */
+export function readTransaction(
+  hash: string,
+): Promise<ProofTransaction | null> {
+  if (!/^[0-9A-F]{64}$/i.test(hash)) return Promise.resolve(null);
+  return withClient(async (client) => {
+    const found = await client.request({
+      command: "tx",
+      transaction: hash.toUpperCase(),
+    });
+    const result = found.result as unknown as {
+      tx_json: Fields;
+      meta?: TransactionMetadata | string;
+      hash: string;
+      validated?: boolean;
+      ledger_index?: number;
+      close_time_iso?: string;
+    };
+    const tx = result.tx_json;
+    const meta = typeof result.meta === "object" ? result.meta : undefined;
+    const code = meta?.TransactionResult ?? "unknown";
+    const date = typeof tx.date === "number" ? tx.date : null;
+    const raw = Array.isArray(tx.RawTransactions) ? tx.RawTransactions : [];
+    return {
+      ...readStep(tx, meta),
+      hash: result.hash,
+      result: code,
+      ok: code === "tesSUCCESS",
+      validated: result.validated === true,
+      ledgerIndex: result.ledger_index ?? null,
+      closedAt:
+        result.close_time_iso ??
+        (date === null
+          ? null
+          : new Date((date + RIPPLE_EPOCH) * 1000).toISOString()),
+      fee: Number(tx.Fee ?? 0) / 1_000_000,
+      parts: raw.map((part: { RawTransaction: Fields }) =>
+        readStep(part.RawTransaction),
+      ),
+    };
+  }).catch(() => null);
+}
+
+export type LedgerAccount = {
+  address: string;
+  xrp: number;
+  dollars: number;
+  /** How many NFTs the account holds. Every Fairseat ticket is one. */
+  nfts: number;
+  /** Payments this account has locked in escrow for someone else. */
+  lockedByIt: { count: number; dollars: number };
+  /** Payments others have locked in escrow for this account. */
+  lockedForIt: { count: number; dollars: number };
+};
+
+/** An account's balances and what it holds, for a proof page. Null if there is none or it cannot be read. */
+export function readAccount(address: string): Promise<LedgerAccount | null> {
+  if (!isValidClassicAddress(address)) return Promise.resolve(null);
+  return withClient(async (client) => {
+    const info = await client.request({
+      command: "account_info",
+      account: address,
+      ledger_index: "validated",
+    });
+    // The issuer cannot hold its own dollars.
+    const dollars =
+      address === issuer().address ? 0 : await getBalance(address);
+
+    let nfts = 0;
+    let marker: unknown;
+    do {
+      const page = await client.request({
+        command: "account_nfts",
+        account: address,
+        limit: 400,
+        marker,
+      });
+      nfts += page.result.account_nfts.length;
+      marker = page.result.marker;
+    } while (marker);
+
+    const lockedByIt = { count: 0, dollars: 0 };
+    const lockedForIt = { count: 0, dollars: 0 };
+    do {
+      const page = await client.request({
+        command: "account_objects",
+        account: address,
+        type: "escrow",
+        limit: 400,
+        marker,
+      });
+      for (const entry of page.result.account_objects as unknown as Fields[]) {
+        const side = entry.Account === address ? lockedByIt : lockedForIt;
+        const amount = readAmount(entry.Amount);
+        side.count += 1;
+        if (amount?.currency === CURRENCY) side.dollars += amount.value;
+      }
+      marker = page.result.marker;
+    } while (marker);
+
+    return {
+      address,
+      xrp: Number(info.result.account_data.Balance) / 1_000_000,
+      dollars,
+      nfts,
+      lockedByIt,
+      lockedForIt,
+    };
+  }).catch(() => null);
 }

@@ -48,6 +48,8 @@ Six XRPL features work together. The code is in [`lib/fairseat/xrpl.ts`](lib/fai
    gets the price minus the organizer's 5%.
 4. **Settle.** When the market settles, the organizer submits one `Batch` of `EscrowFinish` (release
    every payment for that side) and `NFTokenBurn` (remove the tickets for teams that missed out).
+   Each escrow and ticket is then read back from the ledger, and only what really happened is
+   recorded.
 
 Example transactions on Testnet:
 
@@ -147,7 +149,8 @@ Open http://localhost:3000.
 
 | Page | What it is |
 | ---- | ---------- |
-| `/` | Events, with live odds |
+| `/` | Home, with a live preview of one event |
+| `/events` | Events, with live odds |
 | `/events/[id]` | Stadium map and seats |
 | `/events/[id]/seats/[seat]` | One ticket per team, with live prices and resales |
 | `/tickets` | The tickets in your wallet, read from the ledger |
@@ -168,9 +171,14 @@ Open http://localhost:3000.
   real wallet should be held.
 - Sold tickets, open offers and listed events are indexed in a local `.data` folder. The tickets and
   the money themselves are on the ledger.
-- There is no limit on how many tickets one wallet can buy.
+- One wallet can hold at most 4 tickets for the same team in an event, and a resale can ask at most
+  150% of what the ticket costs new at that moment. Both are checked by the server, not by the
+  ledger. The numbers are in [`lib/fairseat/rules.ts`](lib/fairseat/rules.ts).
+- A fan who takes a payment back after the deadline gives up the ticket: the organizer burns it and
+  the seat goes back on sale. A fan who has sold the ticket or given it away cannot take the payment
+  back in the app. The cancel and the burn are two transactions, not one.
 - Logging in takes a username and no password, so the accounts show who is who and protect
-  nothing. The team wallets are held by the server, like the single organizer's.
+  nothing. The club wallets are held by the server, like the single organizer's.
 - Finals played at the teams' home arenas need a second condition (the home team must also make it).
   The events here are treated as neutral venues.
 

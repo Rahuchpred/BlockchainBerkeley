@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/lime/ui/badge";
 import { Button } from "@/components/lime/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/lime/ui/card";
@@ -9,7 +9,8 @@ import { Radio, RadioGroup } from "@/components/lime/ui/radio";
 import { Status } from "@/components/lime/ui/status";
 import { formatAmount } from "@/components/lime/ui/amount";
 import { cn } from "@/lib/lime/utils";
-import { FEE_RATE, percent } from "@/lib/fairseat/data";
+import { FEE_RATE, type Condition } from "@/lib/fairseat/data";
+import { LiveValue } from "./live";
 import { OddsChart, type ChartPoint } from "./odds-chart";
 import { OwnershipBar } from "./ownership-bar";
 import { TeamMark } from "./team-mark";
@@ -36,10 +37,6 @@ export type TeamTicket = {
 /** How many teams show before the rest are folded away. */
 const SHOWN = 6;
 const REFRESH_MS = 15_000;
-/** How long a changed price stays tinted before it fades back. */
-const FLASH_MS = 900;
-
-type Flash = Record<string, "up" | "down">;
 
 const cents = (value: number) => Math.round(value * 100) / 100;
 
@@ -58,11 +55,14 @@ export function TeamTickets({
   market,
   buyBase,
   faceValue,
+  condition,
   teams,
 }: {
   market: string;
   buyBase: string;
   faceValue: number;
+  /** What a team must do for its ticket to become the seat. */
+  condition: Condition;
   teams: TeamTicket[];
 }) {
   const firstOpen =
@@ -73,15 +73,10 @@ export function TeamTickets({
   const [chosen, setChosen] = useState(firstOpen.slug);
   const [expanded, setExpanded] = useState(false);
   const [shares, setShares] = useState<Record<string, number>>({});
-  const [flash, setFlash] = useState<Flash>({});
   const [updated, setUpdated] = useState<string | null>(null);
-  const known = useRef<Record<string, number>>(
-    Object.fromEntries(teams.map((team) => [team.slug, team.share])),
-  );
 
   useEffect(() => {
     let alive = true;
-    let fade: ReturnType<typeof setTimeout> | undefined;
     const refresh = async () => {
       try {
         const response = await fetch(`/api/markets/${market}`);
@@ -89,25 +84,9 @@ export function TeamTickets({
         const body = (await response.json()) as {
           shares: Record<string, number>;
         };
-
-        // Tint each price that moved, in the direction it moved, then let it fade back.
-        const moved: Flash = {};
-        for (const [slug, share] of Object.entries(body.shares)) {
-          const before = known.current[slug];
-          if (
-            before !== undefined &&
-            cents(faceValue * share) !== cents(faceValue * before)
-          )
-            moved[slug] = share > before ? "up" : "down";
-        }
-        known.current = { ...known.current, ...body.shares };
+        // Each price that moved rolls to its new figure and is tinted for a moment. See LiveValue.
         setShares(body.shares);
         setUpdated(new Date().toLocaleTimeString());
-        if (Object.keys(moved).length > 0) {
-          setFlash(moved);
-          clearTimeout(fade);
-          fade = setTimeout(() => alive && setFlash({}), FLASH_MS);
-        }
       } catch {
         // Keep the last prices. The next refresh tries again.
       }
@@ -116,9 +95,8 @@ export function TeamTickets({
     return () => {
       alive = false;
       clearInterval(timer);
-      clearTimeout(fade);
     };
-  }, [market, faceValue]);
+  }, [market]);
 
   const live = teams.map((team) => ({
     ...team,
@@ -147,7 +125,7 @@ export function TeamTickets({
           <p className="max-w-xl text-sm leading-normal text-fg-2">
             The seat&apos;s full price is {formatAmount(faceValue)}, split
             between the teams by their odds. Your ticket becomes the seat if
-            your team makes the final.
+            your team {condition.makes}.
           </p>
           <div className="overflow-hidden rounded-panel bg-surface">
             <RadioGroup
@@ -193,10 +171,11 @@ export function TeamTickets({
                           } as React.CSSProperties
                         }
                       />
-                      <span className="truncate">{team.team}</span>
+                      <span className="min-w-0">{team.team}</span>
                     </span>
                     <span className="truncate text-sm text-fg-3">
-                      {percent(team.share)} of the seat
+                      <LiveValue kind="percent" value={team.share} /> of the
+                      seat
                     </span>
                   </span>
                   {team.resale !== null ? (
@@ -212,19 +191,14 @@ export function TeamTickets({
                   )}
                   <span
                     className={cn(
-                      "font-mono text-base tabular-nums transition-colors duration-(--dur-slow) ease-out",
-                      gone(team)
-                        ? "text-fg-3"
-                        : team.resale !== null
-                          ? "text-fg"
-                          : flash[team.slug] === "up"
-                            ? "text-success-text"
-                            : flash[team.slug] === "down"
-                              ? "text-danger-text"
-                              : "text-fg",
+                      "text-base font-medium tabular-nums",
+                      gone(team) ? "text-fg-3" : "text-fg",
                     )}
                   >
-                    {formatAmount(team.resale ?? cents(faceValue * team.share))}
+                    <LiveValue
+                      value={team.resale ?? cents(faceValue * team.share)}
+                      label={`${team.team} ticket`}
+                    />
                   </span>
                 </label>
               ))}
@@ -261,7 +235,7 @@ export function TeamTickets({
             <div className="flex min-w-0 flex-col gap-1">
               <CardTitle>{picked.team}</CardTitle>
               <CardDescription>
-                Yours if {picked.team} make the final.
+                Yours if {picked.team} {condition.make}.
               </CardDescription>
             </div>
           </div>
@@ -273,15 +247,21 @@ export function TeamTickets({
           <dl className="flex flex-col gap-2 text-sm">
             <div className="flex justify-between gap-3">
               <dt className="text-fg-2">Ticket</dt>
-              <dd className="font-mono tabular-nums">{formatAmount(price)}</dd>
+              <dd className="tabular-nums">
+                <LiveValue key={picked.slug} value={price} />
+              </dd>
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-fg-2">Fee</dt>
-              <dd className="font-mono tabular-nums">{formatAmount(fee)}</dd>
+              <dd className="tabular-nums">
+                <LiveValue key={picked.slug} value={fee} />
+              </dd>
             </div>
             <div className="flex justify-between gap-3 border-t border-line pt-2 font-medium">
               <dt>Total</dt>
-              <dd className="font-mono tabular-nums">{formatAmount(total)}</dd>
+              <dd className="tabular-nums">
+                <LiveValue key={picked.slug} value={total} />
+              </dd>
             </div>
           </dl>
           {/* On a phone the action lives in the bar pinned to the bottom, so it is always in reach. */}
@@ -301,8 +281,8 @@ export function TeamTickets({
         <div className="mx-auto flex max-w-md items-center gap-3">
           <div className="flex min-w-0 flex-1 flex-col">
             <span className="truncate text-sm text-fg-2">{picked.team}</span>
-            <span className="font-mono text-base font-medium tabular-nums">
-              {formatAmount(total)}
+            <span className="text-base font-medium tabular-nums">
+              <LiveValue key={picked.slug} value={total} />
             </span>
           </div>
           {/* eslint-disable-next-line lime/one-primary -- the same action as the panel button, which is hidden at this width */}

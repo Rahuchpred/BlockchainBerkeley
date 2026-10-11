@@ -90,8 +90,9 @@ price, so the organizer is paid in full either way.
 
 ## Design decisions
 
-- **Type:** Lime's own fonts. Hanken Grotesk for text, the system monospace for
-  prices, odds, tickers and seat codes.
+- **Type:** Inter for words and numbers, with its alternate 1 and open 4, 6 and 9.
+  Numbers that change roll and tint as they change. The system monospace is kept
+  for ledger addresses, transaction ids and seat codes.
 - **Design system:** Lime from design.how, installed through shadcn, with its
   accent retuned from acid lime to blue (`#356ed8`, the creator-ops brand
   blue). Installing a Lime component resets the theme, so run
@@ -167,13 +168,20 @@ Everything runs on the XRPL testnet. Code: `lib/fairseat/xrpl.ts`. The README ha
 - **Reselling is one swap between fans.** The holder lists the ticket at their own price. It shows
   on the seat page as "Resale". A gift is the same offer at a price of 0, taken at `/claim/<offer>`.
 - **Settlement is one Batch.** It releases every payment for that side and burns the tickets for
-  teams that missed out. Until a real market settles, `/demo` stages a result first.
+  teams that missed out. A Batch can be recorded as a success when its parts were turned away, so
+  every escrow and ticket is read back from the ledger before anything is marked as settled. Until
+  a real market settles, `/demo` stages a result first.
 
 RLUSD was the plan for the currency. Its testnet issuer has not enabled escrow for its token, so an
 escrow in RLUSD is refused. Smart escrow and the lending features are not on testnet yet.
 
-Not built: a limit on tickets per wallet, a button for the fan's refund after the deadline, and a
-second condition for finals played at home arenas.
+Fairness rules, checked by the server (`lib/fairseat/rules.ts`): one wallet holds at most 4 tickets
+for the same team in an event, and a resale asks at most 150% of what the ticket costs new right
+now. A fan takes an unreleased payment back from the ticket page or the wallet page once the
+deadline has passed. The ticket is burned in return and the seat goes back on sale. `/demo` can
+shorten that deadline to 2 minutes for new purchases.
+
+Not built: a second condition for finals played at home arenas.
 
 ## How Context.dev is used (live since phase 4)
 

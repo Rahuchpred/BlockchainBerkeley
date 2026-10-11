@@ -3,10 +3,11 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { Button } from "@/components/lime/ui/button";
 import { Skeleton } from "@/components/lime/ui/skeleton";
-import { HOME, readSession, type Session } from "@/lib/fairseat/session";
+import { readSession, type Session } from "@/lib/fairseat/session";
 import { readWallet } from "@/lib/fairseat/wallet";
 import { getBalance } from "@/lib/fairseat/xrpl";
 import { logOut } from "../actions";
+import { Logo } from "./logo";
 import { WalletChip } from "./wallet-chip";
 
 // What each kind of account is called beside its name, and the pages it can open.
@@ -17,35 +18,38 @@ const ACCOUNTS: Record<
   buyer: {
     role: "Buyer",
     links: [
-      // On a phone the name already leads to the events, so this link gives up its room.
-      { href: "/", label: "Events", wide: true },
+      { href: "/events", label: "Events" },
       { href: "/tickets", label: "Tickets" },
     ],
   },
-  team: { role: "Organizer", links: [] },
+  team: {
+    role: "Organizer",
+    links: [{ href: "/organizer/nba", label: "Club desk", wide: true }],
+  },
   house: {
     role: "Organizer",
-    links: [{ href: "/organizer/new", label: "List an event", wide: true }],
+    links: [
+      { href: "/organizer", label: "Dashboard" },
+      { href: "/organizer/new", label: "List an event", wide: true },
+    ],
   },
 };
 
 async function WalletSlot() {
   const wallet = await readWallet();
-  // If the ledger cannot be reached, the chip reads "Unavailable" instead of a wrong $0.
+  // The ledger can be slow or briefly unreachable. The header must not take the page down with it.
   const balance = wallet
-    ? await getBalance(wallet.address).catch(() => Number.NaN)
+    ? await getBalance(wallet.address).catch(() => null)
     : null;
   return <WalletChip balance={balance} />;
 }
 
 function Bar({
   side,
-  home,
   below,
   children,
 }: {
   side?: "buyer" | "organizer";
-  home: string;
   /** A second row, for what the top row has no room for on a narrow screen. */
   below?: React.ReactNode;
   children?: React.ReactNode;
@@ -58,10 +62,13 @@ function Bar({
     >
       <div className="mx-auto flex h-14 w-full max-w-5xl items-center gap-2 px-4 sm:px-6">
         <Link
-          href={home}
-          className="me-auto rounded-sm text-base font-semibold text-fg"
+          href="/"
+          aria-label="Fairseat, home"
+          className="me-auto flex items-center gap-2 rounded-sm text-base font-semibold text-fg"
         >
-          Fairseat
+          <Logo className="size-6 shrink-0 text-accent" />
+          {/* On a phone the mark stands alone, so the balance has room to show in full. */}
+          <span className="hidden sm:inline">Fairseat</span>
         </Link>
         {children}
       </div>
@@ -78,7 +85,19 @@ async function Account() {
   // Who is logged in is per visitor, so the header renders per request.
   await connection();
   const session = await readSession();
-  if (!session) return <Bar home="/login" />;
+  if (!session)
+    return (
+      <Bar>
+        <Button
+          variant="outline"
+          size="sm"
+          nativeButton={false}
+          render={<Link href="/login" />}
+        >
+          Log in
+        </Button>
+      </Bar>
+    );
   const { role, links } = ACCOUNTS[session.kind];
   // Who this is, always in view: the role in grey, then the name. Then the way out.
   const account = (
@@ -98,7 +117,6 @@ async function Account() {
   return (
     <Bar
       side={session.kind === "buyer" ? "buyer" : "organizer"}
-      home={HOME[session.kind]}
       below={account}
     >
       <nav aria-label="Main" className="flex items-center gap-1">
@@ -128,7 +146,7 @@ async function Account() {
 
 export function SiteHeader() {
   return (
-    <Suspense fallback={<Bar home="/login" />}>
+    <Suspense fallback={<Bar />}>
       <Account />
     </Suspense>
   );
