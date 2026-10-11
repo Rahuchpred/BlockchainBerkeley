@@ -53,7 +53,16 @@ type Market = {
   paid: Record<string, number>;
   /** Staged results for the demo, by Gemini market: the team said to have made the final. */
   staged: Record<string, string>;
+  /** Payments still locked in an escrow on the ledger, by ticket id. */
+  escrows?: Record<string, Escrow>;
+  /** Who holds each ticket now, so an expired one can be burned. */
+  holders?: Record<string, string>;
+  /** The transactions that settled each market on the ledger. */
+  settled?: Record<string, string[]>;
 };
+
+/** A fan's payment for a ticket, held on the ledger until the finalists are decided. */
+export type Escrow = { owner: string; sequence: number; amount: number };
 
 const market = () =>
   read<Market>("market.json", { offers: {}, paid: {}, staged: {} });
@@ -105,4 +114,54 @@ export const listedEvents = () => read<FairEvent[]>("events.json", []);
 
 export function saveEvent(event: FairEvent) {
   write("events.json", [...listedEvents(), event]);
+}
+
+export const escrowFor = (nftId: string) => market().escrows?.[nftId] ?? null;
+
+export function saveEscrow(nftId: string, escrow: Escrow) {
+  const state = market();
+  write("market.json", {
+    ...state,
+    escrows: { ...state.escrows, [nftId]: escrow },
+  });
+}
+
+export const holderOf = (nftId: string) => market().holders?.[nftId] ?? null;
+
+export function recordHolder(nftId: string, address: string) {
+  const state = market();
+  write("market.json", {
+    ...state,
+    holders: { ...state.holders, [nftId]: address },
+  });
+}
+
+/** Every ticket ever sold, as its key and its id on the ledger. */
+export const soldTickets = () =>
+  Object.entries(read<Sold>("sold.json", {})).map(([key, nftId]) => {
+    const [eventId, seatId, team] = key.split("|");
+    return { eventId, seatId, team, nftId };
+  });
+
+export const ledgerSettlement = (ticker: string) =>
+  market().settled?.[ticker] ?? null;
+
+/** Records that a market was settled on the ledger: its escrows are released and its losing tickets are gone. */
+export function recordSettlement(
+  ticker: string,
+  hashes: string[],
+  released: string[],
+  burned: string[],
+) {
+  const state = market();
+  const escrows = { ...state.escrows };
+  for (const nftId of released) delete escrows[nftId];
+  const offers = { ...state.offers };
+  for (const nftId of burned) delete offers[nftId];
+  write("market.json", {
+    ...state,
+    escrows,
+    offers,
+    settled: { ...state.settled, [ticker]: hashes },
+  });
 }

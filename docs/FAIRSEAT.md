@@ -154,39 +154,41 @@ Endpoint used:
 
 ## How the XRP Ledger is used (live since phase 4)
 
-Everything runs on the XRPL testnet. Code: `lib/fairseat/xrpl.ts`.
+Everything runs on the XRPL testnet. Code: `lib/fairseat/xrpl.ts`. The README has the full table.
 
-- **The ticket is an NFT.** Fairseat's issuer account mints one per seat and team. Its data names the
-  event, the seat and the team. It carries a 5% transfer fee, which the ledger pays to the issuer on
-  every resale.
-- **The money is a test dollar.** The issuer also issues a "USD" token. A new test wallet gets 5,000.
-- **Buying is one swap.** The issuer offers the ticket to the fan for the price. The fan accepts. The
-  ledger moves the dollars and the ticket in the same transaction, or neither.
-- **Reselling is the same swap between fans.** The holder lists the ticket at their own price on the
-  ticket page. It shows on the seat page as "Resale". The buyer accepts, the seller gets the price
-  minus 5%.
-- **Sending to a friend** is an offer at a price of 0. The friend opens `/claim/<offer>` and accepts.
-- **Settlement** follows the Gemini market. Until a real market settles, `/demo` stages a result so
-  the last step can be shown: the winning team's tickets turn into the seat with a gate code, the
-  rest expire.
+- **Two accounts.** The issuer issues the test dollar. The organizer mints the tickets and is who
+  the money ends up with.
+- **The ticket is an NFT** naming the event, the seat and the team, with a 5% transfer fee the
+  ledger pays the organizer on every resale.
+- **Buying is one Batch.** The fan's payment goes into a token escrow for the organizer and the
+  ticket moves to the fan, or neither happens.
+- **The money waits in escrow** until the finalists are decided. Only Fairseat can release it. If it
+  never is, the fan can take it back a month after the event.
+- **Reselling is one swap between fans.** The holder lists the ticket at their own price. It shows
+  on the seat page as "Resale". A gift is the same offer at a price of 0, taken at `/claim/<offer>`.
+- **Settlement is one Batch.** It releases every payment for that side and burns the tickets for
+  teams that missed out. Until a real market settles, `/demo` stages a result first.
 
-Not built: burning expired tickets on the ledger, a limit on tickets per wallet, and refunds for a
-seat whose winning-team ticket nobody bought (the organizer keeps that seat to sell).
+RLUSD was the plan for the currency. Its testnet issuer has not enabled escrow for its token, so an
+escrow in RLUSD is refused. Smart escrow and the lending features are not on testnet yet.
+
+Not built: a limit on tickets per wallet, a button for the fan's refund after the deadline, and a
+second condition for finals played at home arenas.
 
 ## How Context.dev is used (live since phase 4)
 
-An organizer cannot put an event on sale until its details match its official page. Code:
+An organizer cannot put an event on sale until it passes three checks. Code:
 `lib/fairseat/context.ts`.
 
-1. The organizer enters the name, date, venue and the address of the official event page.
-2. Context.dev opens that page and returns the name, date and venue it finds there.
-3. Fairseat compares the two in plain code. Each of the three shows a pass or a fail with what the
-   page says.
-4. Only if all three pass is the event saved and put on sale, with a "Details checked against"
-   badge on its page.
+1. **The official page.** Context.dev opens the page the organizer linked and returns the name, date
+   and venue it finds. All three must match what the organizer typed.
+2. **A second opinion.** Context.dev researches the event on the open web, without the organizer's
+   page. If it finds a different date or venue, the event is blocked. A fake page cannot fool this.
+3. **The site's owner.** Context.dev says who runs the site the page is on. This is shown, not
+   enforced.
 
-Limits: it trusts whatever page the organizer links, so it does not yet check that the page belongs
-to the real organizer. A listed event has one side, one section and three seats.
+Each check shows a pass or a fail with what was found. The plan allows one request at a time, so the
+three run one after another and take about 15 seconds.
 
 ## The demo (2 minutes)
 

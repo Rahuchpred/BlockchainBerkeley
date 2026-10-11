@@ -111,6 +111,8 @@ async function ReviewPageContent({
           <p className="text-sm leading-normal text-fg-2">
             If {outcome.team} do not make the final, this ticket expires and is
             not refunded. You can resell it at any time before then.
+            {resale === null &&
+              " Your payment is held in escrow on the XRP Ledger and released to the organizer once the finalists are decided."}
           </p>
           <PayButton
             eventId={event.id}

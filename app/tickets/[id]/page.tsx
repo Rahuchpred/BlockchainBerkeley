@@ -12,7 +12,7 @@ import { findEvent } from "@/lib/fairseat/events";
 import { getHistory } from "@/lib/fairseat/gemini";
 import { viewTicket } from "@/lib/fairseat/live";
 import { readWallet } from "@/lib/fairseat/wallet";
-import { offerFor, paidFor } from "@/lib/fairseat/store";
+import { escrowFor, offerFor, paidFor } from "@/lib/fairseat/store";
 import { RESALE_RATE, listTickets, txUrl } from "@/lib/fairseat/xrpl";
 import { Status } from "@/components/lime/ui/status";
 import { qrShape } from "@/lib/fairseat/qr";
@@ -53,6 +53,9 @@ async function TicketPageContent({
   if (!view) notFound();
   const gift = typeof claimed === "string";
   const receipt = typeof bought === "string" ? bought : gift ? claimed : null;
+  // The payment for this ticket, if this wallet made it and it is still locked on the ledger.
+  const escrow = escrowFor(ticket.id);
+  const locked = escrow && escrow.owner === wallet?.address ? escrow : null;
   const open = offerFor(ticket.id);
   const offer = open ? { offerId: open.offerId, price: open.price } : null;
 
@@ -103,13 +106,15 @@ async function TicketPageContent({
               label={
                 gift
                   ? "Moved to your wallet on the XRP Ledger"
-                  : `Paid ${formatAmount(ticket.paid)} on the XRP Ledger`
+                  : `Paid ${formatAmount(ticket.paid)}${locked ? " into escrow" : ""} on the XRP Ledger`
               }
             />
             <p className="text-sm leading-normal text-fg-2">
               {gift
                 ? "The ticket now sits in your wallet, and only you can sell or send it."
-                : "The ticket and the payment changed hands in one transaction, so neither could happen without the other."}
+                : locked
+                  ? "Your payment was locked and the ticket moved to you in one step, so neither could happen without the other. The money is released to the organizer once the finalists are decided."
+                  : "The ticket and the payment changed hands in one transaction, so neither could happen without the other."}
             </p>
             <div>
               <Button
@@ -189,6 +194,12 @@ async function TicketPageContent({
             </div>
             <dl className="flex flex-col gap-2 text-sm">
               <Row label="You paid" value={formatAmount(ticket.paid)} />
+              {locked && (
+                <Row
+                  label="Held in escrow on the ledger"
+                  value={formatAmount(locked.amount)}
+                />
+              )}
               <Row label="Worth now" value={formatAmount(worth)} />
               <Row
                 label="Gain or loss"

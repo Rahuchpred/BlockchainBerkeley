@@ -2,7 +2,8 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { allEvents } from "@/lib/fairseat/events";
 import { getMarket } from "@/lib/fairseat/gemini";
-import { stagedResult } from "@/lib/fairseat/store";
+import { ledgerSettlement, stagedResult } from "@/lib/fairseat/store";
+import { txUrl } from "@/lib/fairseat/xrpl";
 import { PageSkeleton } from "../_components/page-skeleton";
 import {
   SettleControls,
@@ -28,6 +29,7 @@ async function DemoContent() {
               .map((outcome) => outcome.team),
             staged: market.settled ?? stagedResult(side.market),
             final: market.settled !== null,
+            ledger: ledgerSettlement(side.market)?.map(txUrl) ?? null,
           };
         }),
     ),

@@ -171,21 +171,56 @@ export function EventForm() {
           {result && "checks" in result && (
             <section className="flex flex-col gap-3">
               <h2 className="text-lg font-semibold">
-                {result.eventId
-                  ? "Checked and on sale"
-                  : "The page does not match"}
+                {result.eventId ? "Checked and on sale" : "Not published"}
               </h2>
               <p className="text-sm leading-normal text-fg-2">
                 {result.eventId
-                  ? `Every detail matches the page at ${result.page}.`
-                  : `The page at ${result.page} says something different. Fix the details below and check again.`}
+                  ? "Every detail matches, and nothing else on the web says otherwise."
+                  : "Something does not match. Fix the details and check again."}
               </p>
+              <h3 className="text-base font-medium">{`The page at ${result.page}`}</h3>
               <ul className="flex flex-col gap-2">
                 {result.checks.map((check) => (
                   <li key={check.field}>
                     <Status
                       status={check.ok ? "done" : "failed"}
                       label={`${FIELD[check.field]}: the page says ${check.found ?? "nothing about it"}`}
+                    />
+                  </li>
+                ))}
+                <li>
+                  <Status
+                    status={result.owner ? "done" : "queued"}
+                    label={
+                      result.owner
+                        ? `Site run by ${result.owner}`
+                        : "We could not tell who runs this site"
+                    }
+                  />
+                </li>
+              </ul>
+              <h3 className="text-base font-medium">
+                A separate search of the web
+              </h3>
+              <p className="text-sm leading-normal text-fg-2">
+                Done without the page above, so a made-up page cannot fool it.
+              </p>
+              <ul className="flex flex-col gap-2">
+                {result.independent.map((check) => (
+                  <li key={check.field}>
+                    <Status
+                      status={
+                        check.ok === null
+                          ? "queued"
+                          : check.ok
+                            ? "done"
+                            : "failed"
+                      }
+                      label={
+                        check.found
+                          ? `${FIELD[check.field]}: other sources say ${check.found}`
+                          : `${FIELD[check.field]}: other sources do not say`
+                      }
                     />
                   </li>
                 ))}
