@@ -1,10 +1,15 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { FairEvent } from "./data";
 
 // The small amount of state Fairseat keeps beside the ledger. The ledger holds the tickets and the
 // offers themselves; these files only make them quick to look up without scanning every account.
-const DIR = join(process.cwd(), ".data");
+// On Vercel the project folder cannot be written to, so the files go in the temporary folder. That
+// folder lasts only as long as the running instance does: fine for a demo, not for keeping.
+const DIR = process.env.VERCEL
+  ? join(tmpdir(), "fairseat-data")
+  : join(process.cwd(), ".data");
 
 function read<T>(name: string, empty: T): T {
   const file = join(DIR, name);
