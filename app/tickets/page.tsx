@@ -6,7 +6,12 @@ import {
   EmptyDescription,
   EmptyTitle,
 } from "@/components/lime/ui/empty";
-import { formatDate, placeOf, seatLabel } from "@/lib/fairseat/data";
+import {
+  conditionOf,
+  formatDate,
+  placeOf,
+  seatLabel,
+} from "@/lib/fairseat/data";
 import { findEvent } from "@/lib/fairseat/events";
 import { viewTicket } from "@/lib/fairseat/live";
 import { qrShape } from "@/lib/fairseat/qr";
@@ -41,6 +46,7 @@ async function Wallet() {
         id: view.ticket.id,
         status: view.status,
         team: view.outcome.team,
+        condition: conditionOf(view.side),
         image: view.outcome.image,
         event: view.event.title,
         date: formatDate(view.event.date),

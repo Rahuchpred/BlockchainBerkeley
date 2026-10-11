@@ -61,12 +61,24 @@ export function describe(
     case "released":
       return {
         title: `${amount} released to the organizer`,
-        detail: "The finalists were decided, so the escrow was opened.",
+        detail: "The result was decided, so the escrow was opened.",
+      };
+    case "refunded":
+      return {
+        title: `${amount} taken back by the fan`,
+        detail:
+          "The escrow was never released and its deadline passed, so the fan undid it.",
       };
     case "burned":
+      if (step.returned)
+        return {
+          title: "Handed back and burned",
+          detail:
+            "The fan took the payment back, so the ticket was removed and the seat went back on sale.",
+        };
       return {
         title: "Expired and burned",
-        detail: "Its team missed the final, so the ticket was removed.",
+        detail: "Its team missed out, so the ticket was removed.",
       };
   }
 }

@@ -7,21 +7,22 @@ import { readTeam, teamName } from "@/lib/fairseat/team";
 import { readWallet } from "@/lib/fairseat/wallet";
 import { getBalance } from "@/lib/fairseat/xrpl";
 import { HeaderBar } from "./header-bar";
+import { Logo } from "./logo";
 import { WalletChip } from "./wallet-chip";
 
 async function WalletSlot() {
-  // The wallet is per visitor and the balance is read from the ledger, so this part renders per request.
+  // The wallet is per visitor, so this part of the header is rendered per request.
   await connection();
   const wallet = await readWallet();
-  // If the ledger cannot be reached, the chip reads "Unavailable" instead of a wrong $0.
+  // The ledger can be slow or briefly unreachable. The header must not take the page down with it.
   const balance = wallet
-    ? await getBalance(wallet.address).catch(() => Number.NaN)
+    ? await getBalance(wallet.address).catch(() => null)
     : null;
   return <WalletChip balance={balance} />;
 }
 
 async function TeamSlot() {
-  // The team an organizer acts for is per visitor, so this part renders per request.
+  // The club a visitor acts for is per visitor, so this part renders per request.
   await connection();
   return (
     <Button
@@ -46,13 +47,11 @@ export function SiteHeader() {
       fallback={
         <header className="sticky top-0 z-10 border-b border-line bg-page">
           <div className="mx-auto flex h-14 w-full max-w-5xl items-center gap-2 px-4 sm:px-6">
-            <span className="me-auto text-base font-semibold text-fg">
-              Fairseat
+            <span className="me-auto flex items-center gap-2 text-base font-semibold text-fg">
+              <Logo className="size-6 shrink-0 text-accent" />
+              <span className="hidden sm:inline">Fairseat</span>
             </span>
             {chip}
-          </div>
-          <div className="mx-auto flex w-full max-w-5xl px-4 pb-2 sm:px-6 md:hidden">
-            <Skeleton shape="block" className="h-8 w-full" />
           </div>
         </header>
       }

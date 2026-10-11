@@ -7,9 +7,12 @@ export type Share = { team: string; share: number; tone: number };
 export function OwnershipBar({
   shares,
   legend = 4,
+  label = "Share of the seat by team",
 }: {
   shares: Share[];
   legend?: number;
+  /** What the bar shows, for a screen reader. */
+  label?: string;
 }) {
   const named = shares.filter((item) => item.tone > 0);
   const rest = shares.filter((item) => item.tone === 0 && item.share > 0);
@@ -26,7 +29,7 @@ export function OwnershipBar({
     <div className="flex flex-col gap-3">
       <div
         role="img"
-        aria-label={`Share of the seat by team: ${summary}`}
+        aria-label={`${label}: ${summary}`}
         className="flex h-3 w-full gap-0.5 overflow-hidden rounded-full"
       >
         {named.map((item) => (
@@ -48,29 +51,34 @@ export function OwnershipBar({
           />
         )}
       </div>
-      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-fg-2">
-        {listed.map((item) => (
-          <li key={item.team} className="flex items-center gap-2">
-            <span
-              aria-hidden="true"
-              className="size-2 shrink-0 rounded-full bg-(--tone)"
-              style={
-                { "--tone": `var(--team-${item.tone})` } as React.CSSProperties
-              }
-            />
-            {item.team} {percent(item.share)}
-          </li>
-        ))}
-        {unlisted > 0 && (
-          <li className="flex items-center gap-2">
-            <span
-              aria-hidden="true"
-              className="size-2 shrink-0 rounded-full bg-(--team-0)"
-            />
-            {unlisted} more {percent(unlistedShare)}
-          </li>
-        )}
-      </ul>
+      {/* A legend of 0 leaves just the bar, for places that list the teams themselves. */}
+      {legend > 0 && (
+        <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-fg-2">
+          {listed.map((item) => (
+            <li key={item.team} className="flex items-center gap-2">
+              <span
+                aria-hidden="true"
+                className="size-2 shrink-0 rounded-full bg-(--tone)"
+                style={
+                  {
+                    "--tone": `var(--team-${item.tone})`,
+                  } as React.CSSProperties
+                }
+              />
+              {item.team} {percent(item.share)}
+            </li>
+          ))}
+          {unlisted > 0 && (
+            <li className="flex items-center gap-2">
+              <span
+                aria-hidden="true"
+                className="size-2 shrink-0 rounded-full bg-(--team-0)"
+              />
+              {unlisted} more {percent(unlistedShare)}
+            </li>
+          )}
+        </ul>
+      )}
     </div>
   );
 }

@@ -16,9 +16,13 @@ export type EventSummary = {
   teams: { team: string; image: string | null }[];
   shares: Share[];
   from: number | null;
+  /** What decides the seat, when it is not a place in the event's own final. */
+  note?: string;
+  /** What the card says once no ticket is on sale: "Finalists decided". */
+  decided: string;
 };
 
-const SPORTS = ["All", "Football", "Baseball", "NBA"];
+const SPORTS = ["All", "Football", "Baseball", "Soccer", "NBA"];
 
 export function EventBrowser({ events }: { events: EventSummary[] }) {
   const [sport, setSport] = useState("All");
@@ -62,13 +66,14 @@ export function EventBrowser({ events }: { events: EventSummary[] }) {
                 <CardTitle>{event.title}</CardTitle>
                 <CardDescription>{event.date}</CardDescription>
                 <CardDescription>{event.place}</CardDescription>
+                {event.note && <CardDescription>{event.note}</CardDescription>}
               </div>
               {event.shares.length > 0 && (
                 <OwnershipBar shares={event.shares} legend={2} />
               )}
               <p className="text-sm text-fg-2">
                 {event.from === null
-                  ? "Finalists decided"
+                  ? event.decided
                   : `From ${formatAmount(event.from)}`}
               </p>
             </Card>

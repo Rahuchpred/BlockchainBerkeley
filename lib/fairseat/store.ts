@@ -46,6 +46,18 @@ export function recordReleases(tickets: { key: string; nftId: string }[]) {
   });
 }
 
+/** Forgets a released ticket that is gone from the ledger, so its club can release it again. */
+export function forgetRelease(nftId: string) {
+  write(
+    "released.json",
+    Object.fromEntries(
+      Object.entries(read<Sold>("released.json", {})).filter(
+        ([, id]) => id !== nftId,
+      ),
+    ),
+  );
+}
+
 /** Every ticket a team has released, sold or not, as its key and its id on the ledger. */
 export const releasedTickets = () =>
   Object.entries(read<Sold>("released.json", {})).map(([key, nftId]) => {
@@ -77,10 +89,18 @@ type Market = {
   holders?: Record<string, string>;
   /** The transactions that settled each market on the ledger. */
   settled?: Record<string, string[]>;
+  /** Demo only: new purchases get a refund deadline minutes away instead of a month after the event. */
+  quickRefunds?: boolean;
 };
 
 /** A fan's payment for a ticket, held on the ledger until the finalists are decided. */
-export type Escrow = { owner: string; sequence: number; amount: number };
+export type Escrow = {
+  owner: string;
+  sequence: number;
+  amount: number;
+  /** When the fan can take it back, as an ISO time, if that is not the event's usual deadline. */
+  refundAfter?: string;
+};
 
 const market = () =>
   read<Market>("market.json", { offers: {}, paid: {}, staged: {} });
@@ -144,6 +164,14 @@ export function saveEscrow(nftId: string, escrow: Escrow) {
   });
 }
 
+/** Forgets an escrow that is no longer on the ledger, because the fan took the payment back. */
+export function clearEscrow(nftId: string) {
+  const state = market();
+  const escrows = { ...state.escrows };
+  delete escrows[nftId];
+  write("market.json", { ...state, escrows });
+}
+
 export const holderOf = (nftId: string) => market().holders?.[nftId] ?? null;
 
 export function recordHolder(nftId: string, address: string) {
@@ -164,23 +192,50 @@ export const soldTickets = () =>
 export const ledgerSettlement = (ticker: string) =>
   market().settled?.[ticker] ?? null;
 
-/** Records that a market was settled on the ledger: its escrows are released and its losing tickets are gone. */
-export function recordSettlement(
-  ticker: string,
-  hashes: string[],
-  released: string[],
-  burned: string[],
-) {
+/**
+ * Records what a settlement really did on the ledger: these payments are no longer in escrow and
+ * these tickets are gone. Anything left out stays as it was, so the settlement can be run again.
+ */
+export function recordSettled(released: string[], burned: string[]) {
   const state = market();
   const escrows = { ...state.escrows };
   for (const nftId of released) delete escrows[nftId];
   const offers = { ...state.offers };
   for (const nftId of burned) delete offers[nftId];
+  write("market.json", { ...state, escrows, offers });
+}
+
+/** Records that a market is settled on the ledger in full, with the transactions that did it. */
+export function recordSettlement(ticker: string, hashes: string[]) {
+  const state = market();
   write("market.json", {
     ...state,
-    escrows,
-    offers,
     settled: { ...state.settled, [ticker]: hashes },
+  });
+}
+
+/**
+ * Forgets a ticket that was refunded and burned: its sale, its escrow, its holder and any open
+ * offer. The seat's ticket for that team can then be sold again.
+ */
+export function forgetTicket(nftId: string) {
+  const sold = read<Sold>("sold.json", {});
+  write(
+    "sold.json",
+    Object.fromEntries(Object.entries(sold).filter(([, id]) => id !== nftId)),
+  );
+  const state = market();
+  const without = <T>(items: Record<string, T> | undefined) => {
+    const kept = { ...items };
+    delete kept[nftId];
+    return kept;
+  };
+  write("market.json", {
+    ...state,
+    offers: without(state.offers),
+    paid: without(state.paid),
+    escrows: without(state.escrows),
+    holders: without(state.holders),
   });
 }
 
@@ -197,6 +252,7 @@ export type Activity = {
     | "sent"
     | "claimed"
     | "released"
+    | "refunded"
     | "burned";
   nftId: string;
   eventId: string;
@@ -210,6 +266,8 @@ export type Activity = {
   from?: string;
   /** The account that received. */
   to?: string;
+  /** On a burn: the fan took the payment back, so the ticket was handed back, not expired. */
+  returned?: boolean;
 };
 
 /** Every recorded step, oldest first. */
@@ -228,3 +286,10 @@ export function logActivity(...items: Omit<Activity, "at">[]) {
 
 /** Every payment still locked in an escrow, by ticket id. */
 export const pendingEscrows = () => market().escrows ?? {};
+
+/** Demo only: whether new purchases get a short refund deadline. */
+export const quickRefunds = () => market().quickRefunds === true;
+
+export function setQuickRefunds(on: boolean) {
+  write("market.json", { ...market(), quickRefunds: on });
+}

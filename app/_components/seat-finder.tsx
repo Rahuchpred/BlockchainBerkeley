@@ -10,7 +10,13 @@ import { OwnershipBar, type Share } from "./ownership-bar";
 import { SectionSeats } from "./section-seats";
 import { StadiumMap, type SectionInfo } from "./stadium-map";
 
-export type FinderSide = { id: string; name: string; shares: Share[] };
+export type FinderSide = {
+  id: string;
+  name: string;
+  /** Who the side's seats are for: "the AFC team that makes the final". */
+  fans: string;
+  shares: Share[];
+};
 export type FinderSeat = {
   id: string;
   side: string;
@@ -52,15 +58,33 @@ export function SeatFinder({
       <section className="flex flex-col gap-3 lg:order-last lg:col-span-3">
         <h2 className="text-lg font-semibold">Pick a section</h2>
         <div className="rounded-panel bg-surface p-3 lg:sticky lg:top-20">
-          <div className="flex justify-between gap-3 px-2 pt-1 text-sm text-fg-2">
-            <span>{sides[1]?.name}</span>
-            <span>{sides[0]?.name}</span>
+          {/* The bowl is split down the middle: each half is for one side's finalist, with its own odds. */}
+          <div className="flex justify-between gap-6 px-2 pt-1">
+            {[sides[1], sides[0]].map(
+              (side, index) =>
+                side && (
+                  <div
+                    key={side.id}
+                    className={
+                      index === 1
+                        ? "flex min-w-0 flex-col gap-1 text-end"
+                        : "flex min-w-0 flex-col gap-1"
+                    }
+                  >
+                    <span className="text-sm font-medium">{side.name}</span>
+                    <span className="text-sm text-fg-2">
+                      {`For fans of ${side.fans}`}
+                    </span>
+                  </div>
+                ),
+            )}
           </div>
           <StadiumMap
             map={map}
             sections={sections}
             selected={section}
             onSelect={setSection}
+            split={sides.length > 1}
             label={`Seating map for ${title}`}
           />
           <div className="flex flex-wrap items-center justify-between gap-3 px-2 pb-1">

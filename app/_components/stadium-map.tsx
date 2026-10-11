@@ -84,6 +84,39 @@ function Field({ kind }: { kind: VenueMap["field"] }) {
       </g>
     );
   }
+  if (kind === "soccer") {
+    return (
+      <g className="fill-none stroke-line-strong" strokeWidth={1}>
+        <rect
+          x={CX - 104}
+          y={CY - 60}
+          width={208}
+          height={120}
+          rx={2}
+          className="fill-success-tint"
+        />
+        <line x1={CX} x2={CX} y1={CY - 60} y2={CY + 60} />
+        <circle cx={CX} cy={CY} r={18} />
+        {/* The penalty area and the goal area at each end. */}
+        {[-1, 1].map((end) => (
+          <g key={end}>
+            <rect
+              x={end < 0 ? CX - 104 : CX + 72}
+              y={CY - 36}
+              width={32}
+              height={72}
+            />
+            <rect
+              x={end < 0 ? CX - 104 : CX + 92}
+              y={CY - 16}
+              width={12}
+              height={32}
+            />
+          </g>
+        ))}
+      </g>
+    );
+  }
   return (
     <g>
       <rect
@@ -117,12 +150,15 @@ export function StadiumMap({
   sections,
   selected,
   onSelect,
+  split,
   label,
 }: {
   map: VenueMap;
   sections: Record<string, SectionInfo>;
   selected: string | null;
   onSelect: (section: string | null) => void;
+  /** Draws the line between the two halves, when the bowl is shared by two sides. */
+  split?: boolean;
   label: string;
 }) {
   const wedges = map.rings.flatMap((ring, ringIndex) =>
@@ -144,6 +180,17 @@ export function StadiumMap({
       viewBox={`0 0 ${W} ${H}`}
       className="h-auto w-full"
     >
+      {split && (
+        <line
+          x1={CX}
+          x2={CX}
+          y1={8}
+          y2={H - 8}
+          strokeWidth={1.5}
+          strokeDasharray="6 6"
+          className="stroke-line-strong"
+        />
+      )}
       <Field kind={map.field} />
       {wedges.map((item) =>
         item.info ? null : (
@@ -185,9 +232,9 @@ export function StadiumMap({
             />
             <g aria-hidden="true">
               <rect
-                x={item.tag.x - 34}
+                x={item.tag.x - 44}
                 y={item.tag.y - 13}
-                width={68}
+                width={88}
                 height={26}
                 rx={13}
                 className="fill-raised stroke-line-strong"
@@ -202,7 +249,7 @@ export function StadiumMap({
               >
                 {item.info.from === null
                   ? item.id
-                  : formatAmount(item.info.from, { compact: true })}
+                  : `from ${formatAmount(item.info.from, { compact: true })}`}
               </text>
             </g>
           </g>

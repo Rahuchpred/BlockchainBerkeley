@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/lime/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/lime/ui/card";
@@ -23,6 +24,9 @@ export type SettleSide = {
   event: string;
   name: string;
   teams: string[];
+  /** What a team does to take the side's seats: "makes the final", and "made the final" once it has. */
+  makes: string;
+  made: string;
   /** The team staged as the finalist, if any. */
   staged: string | null;
   /** The market has really settled on Gemini, so there is nothing to stage. */
@@ -52,10 +56,7 @@ export function SettleControls({ sides }: { sides: SettleSide[] }) {
               </div>
               {side.staged ? (
                 <>
-                  <Status
-                    status="done"
-                    label={`${side.staged} made the final`}
-                  />
+                  <Status status="done" label={`${side.staged} ${side.made}`} />
                   {side.ledger ? (
                     <>
                       <Status status="done" label="Settled on the XRP Ledger" />
@@ -66,9 +67,7 @@ export function SettleControls({ sides }: { sides: SettleSide[] }) {
                             variant="outline"
                             size="sm"
                             nativeButton={false}
-                            render={
-                              <a href={link} target="_blank" rel="noreferrer" />
-                            }
+                            render={<Link href={link} />}
                           >
                             {side.ledger?.length === 1
                               ? "View the transaction"
@@ -137,7 +136,7 @@ export function SettleControls({ sides }: { sides: SettleSide[] }) {
               ) : (
                 <>
                   <Field name={side.market}>
-                    <FieldLabel>Team that makes the final</FieldLabel>
+                    <FieldLabel>{`Team that ${side.makes}`}</FieldLabel>
                     <Select
                       items={items}
                       value={choice}

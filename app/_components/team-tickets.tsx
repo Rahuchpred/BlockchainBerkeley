@@ -9,7 +9,7 @@ import { Radio, RadioGroup } from "@/components/lime/ui/radio";
 import { Status } from "@/components/lime/ui/status";
 import { formatAmount } from "@/components/lime/ui/amount";
 import { cn } from "@/lib/lime/utils";
-import { FEE_RATE, percent } from "@/lib/fairseat/data";
+import { FEE_RATE, percent, type Condition } from "@/lib/fairseat/data";
 import { OddsChart, type ChartPoint } from "./odds-chart";
 import { OwnershipBar } from "./ownership-bar";
 import { TeamMark } from "./team-mark";
@@ -58,11 +58,14 @@ export function TeamTickets({
   market,
   buyBase,
   faceValue,
+  condition,
   teams,
 }: {
   market: string;
   buyBase: string;
   faceValue: number;
+  /** What a team must do for its ticket to become the seat. */
+  condition: Condition;
   teams: TeamTicket[];
 }) {
   const firstOpen =
@@ -147,7 +150,7 @@ export function TeamTickets({
           <p className="max-w-xl text-sm leading-normal text-fg-2">
             The seat&apos;s full price is {formatAmount(faceValue)}, split
             between the teams by their odds. Your ticket becomes the seat if
-            your team makes the final.
+            your team {condition.makes}.
           </p>
           <div className="overflow-hidden rounded-panel bg-surface">
             <RadioGroup
@@ -261,7 +264,7 @@ export function TeamTickets({
             <div className="flex min-w-0 flex-col gap-1">
               <CardTitle>{picked.team}</CardTitle>
               <CardDescription>
-                Yours if {picked.team} make the final.
+                Yours if {picked.team} {condition.make}.
               </CardDescription>
             </div>
           </div>
