@@ -16,8 +16,8 @@ export function WalletChip({ balance }: { balance: number | null }) {
     return (
       <Balance
         value={balance}
-        actionLabel="Open my tickets"
-        onClick={() => router.push("/tickets")}
+        actionLabel="Open my wallet"
+        onClick={() => router.push("/wallet")}
       />
     );
   }

@@ -247,6 +247,8 @@ export function listTickets(address: string): Promise<HeldTicket[]> {
 export type Purchase = {
   nftId: string;
   hash: string;
+  /** The transaction that minted the ticket. */
+  mintHash: string;
   /** Where the fan's payment is held: an escrow is named by its owner and a sequence number. */
   escrow: { owner: string; sequence: number };
 };
@@ -313,6 +315,7 @@ export function buyTicket(
       return {
         nftId,
         hash: paid.hash,
+        mintHash: mint.result.hash,
         escrow: { owner: fan.address, sequence },
       };
     } catch (error) {
@@ -344,18 +347,21 @@ export type Settlement = {
  * Settles tickets once the finalists are decided: releases each payment to the organizer and burns
  * the tickets for teams that missed out. Returns the transactions that did it.
  */
-export function settleTickets(tickets: Settlement[]): Promise<string[]> {
+export function settleTickets(
+  tickets: Settlement[],
+): Promise<{ hashes: string[]; byTicket: Record<string, string> }> {
   return withClient(async (client) => {
     const house = organizer();
     const parts = tickets.flatMap((ticket) => [
       ...(ticket.escrow
         ? [
             {
-              TransactionType: "EscrowFinish",
-              Account: house.address,
-              Owner: ticket.escrow.owner,
-              OfferSequence: ticket.escrow.sequence,
-              ...{
+              nftId: ticket.nftId,
+              tx: {
+                TransactionType: "EscrowFinish",
+                Account: house.address,
+                Owner: ticket.escrow.owner,
+                OfferSequence: ticket.escrow.sequence,
                 Condition: escrowLock(ticket.nftId).condition,
                 Fulfillment: escrowLock(ticket.nftId).fulfillment,
               },
@@ -365,25 +371,31 @@ export function settleTickets(tickets: Settlement[]): Promise<string[]> {
       ...(ticket.burnFrom
         ? [
             {
-              TransactionType: "NFTokenBurn",
-              Account: house.address,
-              Owner: ticket.burnFrom,
-              NFTokenID: ticket.nftId,
+              nftId: ticket.nftId,
+              tx: {
+                TransactionType: "NFTokenBurn",
+                Account: house.address,
+                Owner: ticket.burnFrom,
+                NFTokenID: ticket.nftId,
+              },
             },
           ]
         : []),
     ]);
     const hashes: string[] = [];
+    const byTicket: Record<string, string> = {};
     for (let at = 0; at < parts.length; at += BATCH_LIMIT) {
+      const chunk = parts.slice(at, at + BATCH_LIMIT);
       const done = await submitTogether(
         client,
         house,
-        parts.slice(at, at + BATCH_LIMIT),
+        chunk.map((part) => part.tx),
         "Settling the tickets",
       );
       hashes.push(done.hash);
+      for (const part of chunk) byTicket[part.nftId] = done.hash;
     }
-    return hashes;
+    return { hashes, byTicket };
   });
 }
 

@@ -7,18 +7,24 @@ import { Button } from "@/components/lime/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/lime/ui/card";
 import { formatAmount } from "@/components/lime/ui/amount";
 import { Icon, ArrowLeft } from "@/components/lime/icon";
-import { formatDate, percent, seatLabel } from "@/lib/fairseat/data";
+import { formatDate, percent, placeOf, seatLabel } from "@/lib/fairseat/data";
 import { findEvent } from "@/lib/fairseat/events";
 import { getHistory } from "@/lib/fairseat/gemini";
 import { viewTicket } from "@/lib/fairseat/live";
 import { readWallet } from "@/lib/fairseat/wallet";
-import { escrowFor, offerFor, paidFor } from "@/lib/fairseat/store";
+import {
+  activityFor,
+  escrowFor,
+  offerFor,
+  paidFor,
+} from "@/lib/fairseat/store";
 import { RESALE_RATE, listTickets, txUrl } from "@/lib/fairseat/xrpl";
 import { Status } from "@/components/lime/ui/status";
 import { qrShape } from "@/lib/fairseat/qr";
 import { OddsChart } from "../../_components/odds-chart";
 import { PageSkeleton } from "../../_components/page-skeleton";
-import { QrCode } from "../../_components/qr-code";
+import { GatePass } from "../../_components/gate-pass";
+import { LedgerTrail } from "../../_components/ledger-trail";
 import { TicketActions } from "../../_components/ticket-actions";
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -136,12 +142,19 @@ async function TicketPageContent({
             <h2 className="text-lg font-semibold">Your seat</h2>
             <p className="text-sm leading-normal text-fg-2">
               {outcome.team} made the final, so this ticket is now the seat.
-              Show this code at the gate.
+              Show this pass at the gate.
             </p>
-            <QrCode
-              shape={qrShape(`fairseat:${ticket.id}`)}
-              label={`Gate code for ${seatLabel(seat)}`}
-              className="size-48 rounded-md"
+            <GatePass
+              team={outcome.team}
+              image={outcome.image}
+              event={event.title}
+              when={formatDate(event.date)}
+              place={placeOf(event)}
+              section={seat.section}
+              row={seat.row}
+              seat={seat.seat}
+              qr={qrShape(`fairseat:${ticket.id}`)}
+              code={`${ticket.id.slice(0, 8)}...${ticket.id.slice(-8)}`}
             />
           </section>
         )}
@@ -207,6 +220,14 @@ async function TicketPageContent({
               />
             </dl>
           </Card>
+        </section>
+        <section className="flex flex-col gap-3">
+          <h2 className="text-lg font-semibold">On the ledger</h2>
+          <p className="max-w-xl text-sm leading-normal text-fg-2">
+            Every step in this ticket&apos;s life is a transaction on the XRP
+            Ledger that anyone can check.
+          </p>
+          <LedgerTrail steps={activityFor(ticket.id)} />
         </section>
       </main>
     </>

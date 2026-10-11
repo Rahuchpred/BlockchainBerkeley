@@ -11,6 +11,10 @@ import {
   type Seat,
 } from "@/lib/fairseat/data";
 import { findEvent } from "@/lib/fairseat/events";
+import { holderOf, soldTickets } from "@/lib/fairseat/store";
+import { readWallet } from "@/lib/fairseat/wallet";
+import { Button } from "@/components/lime/ui/button";
+import Link from "next/link";
 import { fromPrice, loadSides, type LiveSide } from "@/lib/fairseat/live";
 import { SeatFinder } from "../../_components/seat-finder";
 import type { SectionInfo } from "../../_components/stadium-map";
@@ -38,9 +42,20 @@ async function EventPageContent({
   const from = fromPrice(event, sides);
   const sideOf = (seat: Seat) => sides.find((side) => side.id === seat.side);
 
+  const wallet = await readWallet();
+  const sold = soldTickets().filter((ticket) => ticket.eventId === event.id);
+
   const seats = event.seats.map((seat) => {
     const side = sideOf(seat);
+    const taken = sold.filter((ticket) => ticket.seatId === seat.id);
     return {
+      row: seat.row,
+      seat: seat.seat,
+      sold: taken.length,
+      teams: side?.outcomes.length ?? 0,
+      mine:
+        wallet !== null &&
+        taken.some((ticket) => holderOf(ticket.nftId) === wallet.address),
       id: seat.id,
       side: seat.side,
       section: seat.section,
@@ -83,6 +98,15 @@ async function EventPageContent({
             ? " The finalists are decided, so the tickets for them are now real seats."
             : ` Tickets start at ${formatAmount(from)}.`}
         </p>
+        <div>
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<Link href={`/events/${event.id}/market`} />}
+          >
+            See the market
+          </Button>
+        </div>
       </header>
       <SeatFinder
         title={event.title}

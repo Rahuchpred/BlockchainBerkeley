@@ -56,7 +56,10 @@ export type Ticket = {
 /** The share of each sale Fairseat keeps. */
 export const FEE_RATE = 0.025;
 
-/** Three seats in one section, all at the same full price. */
+/** The rows and seats a section holds. Fairseat sells a few of them. */
+export const SECTION = { rows: 10, seats: 16 };
+
+/** The seats Fairseat sells in one section, all at the same full price. */
 export const seats = (
   side: string,
   section: string,
@@ -65,7 +68,11 @@ export const seats = (
   [
     ["3", "12"],
     ["3", "13"],
+    ["3", "14"],
+    ["3", "15"],
     ["8", "4"],
+    ["8", "5"],
+    ["8", "6"],
   ].map(([row, seat]) => ({
     id: `${section}-${row}-${seat}`,
     side,

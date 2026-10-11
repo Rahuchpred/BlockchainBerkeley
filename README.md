@@ -117,8 +117,11 @@ Open http://localhost:3000.
 | `/events/[id]` | Stadium map and seats |
 | `/events/[id]/seats/[seat]` | One ticket per team, with live prices and resales |
 | `/tickets` | The tickets in your wallet, read from the ledger |
-| `/tickets/[id]` | One ticket: its worth over time, sell, send |
+| `/tickets/[id]` | One ticket: its worth over time, sell, send, and its trail on the ledger |
 | `/claim/[offer]` | Claim a ticket a friend sent |
+| `/events/[id]/market` | Every team's odds on one chart, today's movers, recent sales |
+| `/wallet` | Balance, money locked in escrow, and every step with its transaction |
+| `/organizer` | What each event has sold and where the money is on the ledger |
 | `/organizer/new` | List an event, behind the Context.dev checks |
 | `/demo` | Stage a result and settle it on the ledger |
 

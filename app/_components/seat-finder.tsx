@@ -7,6 +7,7 @@ import { Status } from "@/components/lime/ui/status";
 import { formatAmount } from "@/components/lime/ui/amount";
 import type { VenueMap } from "@/lib/fairseat/data";
 import { OwnershipBar, type Share } from "./ownership-bar";
+import { SectionSeats } from "./section-seats";
 import { StadiumMap, type SectionInfo } from "./stadium-map";
 
 export type FinderSide = { id: string; name: string; shares: Share[] };
@@ -18,6 +19,13 @@ export type FinderSeat = {
   summary: string;
   faceValue: number;
   href: string;
+  row: string;
+  seat: string;
+  /** How many of this seat's team tickets are sold, and how many teams it has. */
+  sold: number;
+  teams: number;
+  /** This wallet holds a ticket for the seat. */
+  mine: boolean;
 };
 
 // The event's seats two ways: the bowl to pick a section from, and the seats in it to open.
@@ -77,6 +85,7 @@ export function SeatFinder({
             </Button>
           </div>
         )}
+        {section && <SectionSeats section={section} seats={shown} />}
         {sides.map((side) => {
           const rows = shown.filter((seat) => seat.side === side.id);
           if (rows.length === 0) return null;

@@ -26,9 +26,11 @@ export function SiteHeader() {
           Fairseat
         </Link>
         <nav aria-label="Main" className="ms-auto flex items-center gap-1">
+          {/* On a phone the name already leads to the events, so this link gives up its room. */}
           <Button
             variant="ghost"
             size="sm"
+            className="hidden sm:inline-flex"
             nativeButton={false}
             render={<Link href="/" />}
           >
@@ -40,16 +42,15 @@ export function SiteHeader() {
             nativeButton={false}
             render={<Link href="/tickets" />}
           >
-            My tickets
+            Tickets
           </Button>
           <Button
             variant="ghost"
             size="sm"
-            className="hidden sm:inline-flex"
             nativeButton={false}
-            render={<Link href="/organizer/new" />}
+            render={<Link href="/organizer" />}
           >
-            List an event
+            Organizer
           </Button>
         </nav>
         {/* The stand-in holds the chip's space so the links do not slide when the balance arrives. */}

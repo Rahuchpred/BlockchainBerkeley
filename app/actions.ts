@@ -24,6 +24,7 @@ import {
   findOffer,
   holderOf,
   ledgerSettlement,
+  logActivity,
   offerFor,
   recordHolder,
   recordPaid,
@@ -45,6 +46,7 @@ import {
   createFanWallet,
   listTickets,
   offerTicket,
+  organizerAddress,
   settleTickets,
 } from "@/lib/fairseat/xrpl";
 import { allEvents } from "@/lib/fairseat/events";
@@ -111,6 +113,17 @@ export async function buyTeamTicket(
       clearOffer(taken);
       recordPaid(taken, offer.price);
       recordHolder(taken, wallet.address);
+      logActivity({
+        kind: "resold",
+        nftId,
+        eventId,
+        seatId,
+        team,
+        amount: offer.price,
+        hash,
+        from: wallet.address,
+        to: offer.from,
+      });
     } else {
       const price = priceFor(seat, outcome.share);
       const wallet = await ensureWallet();
@@ -126,6 +139,18 @@ export async function buyTeamTicket(
       ({ nftId, hash } = bought);
       saveEscrow(nftId, { ...bought.escrow, amount: paid });
       recordHolder(nftId, wallet.address);
+      const ticket = { nftId, eventId, seatId, team };
+      logActivity(
+        { ...ticket, kind: "minted", hash: bought.mintHash },
+        {
+          ...ticket,
+          kind: "bought",
+          amount: paid,
+          hash,
+          from: wallet.address,
+          to: organizerAddress(),
+        },
+      );
       recordSale(key, nftId);
     }
   } catch (error) {
@@ -157,7 +182,21 @@ export async function offerHeldTicket(
     if (!held) return { error: "That ticket is not in your wallet" };
     if (offerFor(nftId)) return { error: "This ticket already has an offer" };
     const amount = Math.round(price * 100) / 100;
-    const { offerId } = await offerTicket(held.wallet.seed, nftId, amount);
+    const { offerId, hash } = await offerTicket(
+      held.wallet.seed,
+      nftId,
+      amount,
+    );
+    logActivity({
+      kind: amount > 0 ? "listed" : "sent",
+      nftId,
+      eventId: held.ticket.eventId,
+      seatId: held.ticket.seatId,
+      team: held.ticket.team,
+      amount: amount > 0 ? amount : undefined,
+      hash,
+      from: held.wallet.address,
+    });
     saveOffer(nftId, {
       offerId,
       price: amount,
@@ -179,8 +218,17 @@ export async function withdrawOffer(nftId: string): Promise<ActionResult> {
     const offer = offerFor(nftId);
     if (!wallet || !offer || offer.from !== wallet.address)
       return { error: "There is no offer of yours on this ticket" };
-    await cancelOffer(wallet.seed, offer.offerId);
+    const { hash } = await cancelOffer(wallet.seed, offer.offerId);
     clearOffer(nftId);
+    logActivity({
+      kind: "unlisted",
+      nftId,
+      eventId: offer.eventId,
+      seatId: offer.seatId,
+      team: offer.team,
+      hash,
+      from: wallet.address,
+    });
   } catch (error) {
     return { error: message(error) };
   }
@@ -206,6 +254,16 @@ export async function claimTicket(offerId: string): Promise<ActionResult> {
     clearOffer(nftId);
     recordPaid(nftId, 0);
     recordHolder(nftId, wallet.address);
+    logActivity({
+      kind: "claimed",
+      nftId,
+      eventId: offer.eventId,
+      seatId: offer.seatId,
+      team: offer.team,
+      hash,
+      from: offer.from,
+      to: wallet.address,
+    });
   } catch (error) {
     return { error: message(error) };
   }
@@ -331,12 +389,13 @@ export async function settleOnLedger(
       return [
         {
           nftId: ticket.nftId,
+          about: ticket,
           escrow,
           burnFrom: ticket.team === winner ? null : holderOf(ticket.nftId),
         },
       ];
     });
-    const hashes = await settleTickets(tickets);
+    const { hashes, byTicket } = await settleTickets(tickets);
     const released = tickets.filter((ticket) => ticket.escrow);
     const burned = tickets.filter((ticket) => ticket.burnFrom);
     recordSettlement(
@@ -344,6 +403,22 @@ export async function settleOnLedger(
       hashes,
       released.map((ticket) => ticket.nftId),
       burned.map((ticket) => ticket.nftId),
+    );
+    logActivity(
+      ...released.map((ticket) => ({
+        ...ticket.about,
+        kind: "released" as const,
+        amount: ticket.escrow?.amount,
+        hash: byTicket[ticket.nftId],
+        from: ticket.escrow?.owner,
+        to: organizerAddress(),
+      })),
+      ...burned.map((ticket) => ({
+        ...ticket.about,
+        kind: "burned" as const,
+        hash: byTicket[ticket.nftId],
+        from: ticket.burnFrom ?? undefined,
+      })),
     );
     revalidatePath("/", "layout");
     return {

@@ -19,7 +19,14 @@ import {
 import { findEvent } from "@/lib/fairseat/events";
 import { getHistory } from "@/lib/fairseat/gemini";
 import { loadSide } from "@/lib/fairseat/live";
-import { offerFor, soldTicket, ticketKey } from "@/lib/fairseat/store";
+import {
+  holderOf,
+  offerFor,
+  soldTicket,
+  ticketKey,
+} from "@/lib/fairseat/store";
+import { shortAddress } from "@/lib/fairseat/story";
+import { slug } from "@/lib/fairseat/data";
 import { PageSkeleton } from "../../../../_components/page-skeleton";
 import { TeamTickets } from "../../../../_components/team-tickets";
 
@@ -60,6 +67,17 @@ async function SeatPageContent({
     }),
   );
 
+  // Once the side has settled: who ended up with this seat.
+  const winning =
+    side.settled &&
+    soldTicket(ticketKey(event.id, seat.id, slug(side.settled)));
+  const holder = winning ? holderOf(winning) : null;
+  const seatWinner = !side.settled
+    ? ""
+    : winning
+      ? `This seat now belongs to the fan who held the ${side.settled} ticket${holder ? `, wallet ${shortAddress(holder)}` : ""}. The other tickets have expired.`
+      : `Nobody bought the ${side.settled} ticket for this seat, so the seat is still the organizer's to sell. The other tickets have expired.`;
+
   return (
     <>
       <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 pt-4 pb-8 sm:px-6 sm:pt-8">
@@ -89,7 +107,7 @@ async function SeatPageContent({
             </EmptyTitle>
             <EmptyDescription>
               {side.settled
-                ? `This seat now belongs to the fan who held the ${side.settled} ticket. The other tickets have expired.`
+                ? seatWinner
                 : "The market has no prices for this side yet. Check back once trading starts."}
             </EmptyDescription>
             <EmptyActions>

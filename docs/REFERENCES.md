@@ -65,3 +65,14 @@ structure between them.
   The frame is usable (map on the left, legend and summary on the right), but
   it is not a stadium. The first build skips the map and names the seat in
   text.
+
+## 8. Platform screens (added with the ledger trail, wallet, dashboard and market)
+
+| Screen | Reference | What we take |
+|---|---|---|
+| Ticket trail | [GetYourGuide itinerary](https://mobbin.com/screens/4c6089bb-c5ed-4e53-8b37-307c502463ea) | A vertical line of dots, one step per row, title with a line of detail under it |
+| Organizer dashboard | [DoorDash Merchant insights](https://mobbin.com/screens/baa5ad84-55ca-40a8-ad1a-aeafa3364fcf), [Klaviyo flows](https://mobbin.com/screens/cfc3202e-13f7-45bc-bdb1-40e20eb9c094) | A row of headline numbers on top, then a table with one row per item and a status badge |
+| Wallet | [Shopify Balance](https://mobbin.com/screens/4cbb6c72-ee1f-4735-b292-1507851203f4), [Base activity](https://mobbin.com/screens/90bfce7d-2fe7-4e0d-8603-c2c57651a7ef) | Available and pending amounts side by side, then activity rows: what, amount, date |
+| Market | [AirOps analytics](https://mobbin.com/screens/34ea2e01-87d4-4e1d-bfb2-1423b6ab8d40), [Copilot investments](https://mobbin.com/screens/df0a19e8-30c4-4d6a-8855-7060478380ac) | A row of top movers, one chart with a line per item and a legend under it, then a table with a change chip per row |
+| Seats in a section | [Singapore Airlines seat map](https://mobbin.com/screens/e0d64347-3c45-4d10-a608-963fca7fdebb) | Legend on top, row numbers down the side, a grid of squares with unavailable ones greyed |
+| Gate pass | [Luma ticket](https://mobbin.com/screens/fd60dbd4-6f2f-43e8-a2a8-dbf6954b3f59), [Jomo QR pass](https://mobbin.com/screens/21b16415-f52f-45c8-9ded-4fe20bdd10ba) | Event on top, the code large in the middle set off by a dashed line, ticket details around it |

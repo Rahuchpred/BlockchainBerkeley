@@ -165,3 +165,48 @@ export function recordSettlement(
     settled: { ...state.settled, [ticker]: hashes },
   });
 }
+
+/** One step in a ticket's life, as it happened on the ledger. */
+export type Activity = {
+  /** When it happened, as an ISO time. */
+  at: string;
+  kind:
+    | "minted"
+    | "bought"
+    | "listed"
+    | "unlisted"
+    | "resold"
+    | "sent"
+    | "claimed"
+    | "released"
+    | "burned";
+  nftId: string;
+  eventId: string;
+  seatId: string;
+  team: string;
+  /** Dollars moved or asked, where the step has an amount. */
+  amount?: number;
+  /** The transaction on the ledger. */
+  hash?: string;
+  /** The account that paid or gave. */
+  from?: string;
+  /** The account that received. */
+  to?: string;
+};
+
+/** Every recorded step, oldest first. */
+export const allActivity = () => read<Activity[]>("activity.json", []);
+
+export const activityFor = (nftId: string) =>
+  allActivity().filter((item) => item.nftId === nftId);
+
+export function logActivity(...items: Omit<Activity, "at">[]) {
+  const at = new Date().toISOString();
+  write("activity.json", [
+    ...allActivity(),
+    ...items.map((item) => ({ at, ...item })),
+  ]);
+}
+
+/** Every payment still locked in an escrow, by ticket id. */
+export const pendingEscrows = () => market().escrows ?? {};
