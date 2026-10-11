@@ -5,6 +5,7 @@ import { Button } from "@/components/lime/ui/button";
 import { Skeleton } from "@/components/lime/ui/skeleton";
 import { readWallet } from "@/lib/fairseat/wallet";
 import { getBalance } from "@/lib/fairseat/xrpl";
+import { Logo } from "./logo";
 import { WalletChip } from "./wallet-chip";
 
 async function WalletSlot() {
@@ -22,8 +23,14 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-10 border-b border-line bg-page">
       <div className="mx-auto flex h-14 w-full max-w-5xl items-center gap-2 px-4 sm:px-6">
-        <Link href="/" className="rounded-sm text-base font-semibold text-fg">
-          Fairseat
+        <Link
+          href="/"
+          aria-label="Fairseat, all events"
+          className="flex items-center gap-2 rounded-sm text-base font-semibold text-fg"
+        >
+          <Logo className="size-6 shrink-0 text-accent" />
+          {/* On a phone the mark stands alone, so the balance has room to show in full. */}
+          <span className="hidden sm:inline">Fairseat</span>
         </Link>
         <nav aria-label="Main" className="ms-auto flex items-center gap-1">
           {/* On a phone the name already leads to the events, so this link gives up its room. */}
