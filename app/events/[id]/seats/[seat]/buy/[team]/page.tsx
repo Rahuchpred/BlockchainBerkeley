@@ -81,12 +81,12 @@ async function ReviewPageContent({
   // since the club offers each of those to its buyer.
   const run =
     taken || event.teamWallets
-    ? [seat]
-    : seatsBeside(
-        event,
-        seat,
-        (item) => !soldTicket(ticketKey(event.id, item.id, outcome.slug)),
-      );
+      ? [seat]
+      : seatsBeside(
+          event,
+          seat,
+          (item) => !soldTicket(ticketKey(event.id, item.id, outcome.slug)),
+        );
   const most = Math.min(run.length, GROUP_LIMIT);
   const count = Math.min(Math.max(Math.trunc(Number(asked)) || 1, 1), most);
   const group = groupOf(run, seat, count);

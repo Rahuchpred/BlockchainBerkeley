@@ -141,7 +141,7 @@ async function WalletContent() {
         <Stat
           label="Locked in escrow"
           value={locked}
-          note="Released to the organizer once the finalists are decided"
+          note="Released to the organizer once each result is decided"
         />
       </div>
 
@@ -162,8 +162,8 @@ async function WalletContent() {
         <section className="flex flex-col gap-3">
           <h2 className="text-lg font-semibold">Locked payments</h2>
           <p className="max-w-xl text-sm leading-normal text-fg-2">
-            Each payment waits in escrow until the finalists are decided. If one
-            is never released, you can take it back from the date shown.
+            Each payment waits in escrow until its result is decided. If one is
+            never released, you can take it back from the date shown.
           </p>
           <Table>
             <TableHeader>

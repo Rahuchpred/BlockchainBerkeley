@@ -160,7 +160,7 @@ export function TicketPass({
             <div className="flex items-center gap-3 rounded-t-panel bg-(--tone-soft) p-4">
               <TeamMark image={image} team={team} size="lg" />
               <div className="flex min-w-0 flex-1 flex-col gap-1">
-                <p className="truncate text-lg leading-snug font-semibold">
+                <p className="text-lg leading-snug font-semibold">
                   {`If ${team} ${condition.make}`}
                 </p>
                 <p className="truncate text-sm text-fg-2">{`${event}, ${when}`}</p>

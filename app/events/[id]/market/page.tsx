@@ -150,7 +150,8 @@ async function MarketContent({
                   <TableRow>
                     <TableHead>Team</TableHead>
                     <TableHead className="text-end">Chance</TableHead>
-                    <TableHead>Today</TableHead>
+                    {/* On a phone the change is left out so the price stays on screen. */}
+                    <TableHead className="max-sm:hidden">Today</TableHead>
                     <TableHead className="text-end">Tickets from</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -174,7 +175,7 @@ async function MarketContent({
                       <TableCell className="text-end tabular-nums">
                         <LiveValue kind="percent" value={team.chance} />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="max-sm:hidden">
                         <Change points={team.change} />
                       </TableCell>
                       <TableCell className="text-end tabular-nums">

@@ -268,7 +268,7 @@ async function Dashboard() {
                             team={team.name}
                             size="sm"
                           />
-                          <span className="w-24 shrink-0 truncate text-sm capitalize">
+                          <span className="w-32 shrink-0 truncate text-sm capitalize">
                             {team.name}
                           </span>
                           <span className="flex h-2 flex-1 overflow-hidden rounded-full bg-surface-3">

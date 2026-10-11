@@ -18,7 +18,7 @@ export function Stat({
   return (
     <Card variant="surface" className="w-full">
       <p className="text-sm text-fg-2">{label}</p>
-      <p className="text-2xl font-semibold tracking-tight tabular-nums">
+      <p className="text-xl font-semibold tracking-tight tabular-nums sm:text-2xl">
         {typeof value === "number" ? (
           <LiveValue value={value} kind={kind} label={label} arrow />
         ) : (

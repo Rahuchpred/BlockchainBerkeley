@@ -55,7 +55,7 @@ export function SeatFinder({
 
   return (
     <div className="grid gap-8 lg:grid-cols-5">
-      <section className="flex flex-col gap-3 lg:order-last lg:col-span-3">
+      <section className="flex min-w-0 flex-col gap-3 lg:order-last lg:col-span-3">
         <h2 className="text-lg font-semibold">Pick a section</h2>
         <div className="rounded-panel bg-surface p-3 lg:sticky lg:top-20">
           {/* The bowl is split down the middle: each half is for one side's finalist, with its own odds. */}
@@ -66,7 +66,7 @@ export function SeatFinder({
                   <div
                     key={side.id}
                     className={
-                      index === 1
+                      index === 1 && sides.length > 1
                         ? "flex min-w-0 flex-col gap-1 text-end"
                         : "flex min-w-0 flex-col gap-1"
                     }
@@ -96,7 +96,7 @@ export function SeatFinder({
         </div>
       </section>
 
-      <div className="flex flex-col gap-8 lg:col-span-2">
+      <div className="flex min-w-0 flex-col gap-8 lg:col-span-2">
         {section && (
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold">Section {section}</h2>

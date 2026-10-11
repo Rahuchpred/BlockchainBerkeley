@@ -17,7 +17,7 @@ const SCREENS = [
     id: "teams",
     label: "Pick your team",
     src: "/screens/teams.png",
-    alt: "One seat with a ticket for each team, priced by its odds: Buffalo at $210.53, Kansas City at $173.68, down to Cincinnati at $84.21.",
+    alt: "One seat with a ticket for each team, priced by its odds: Buffalo at $209.61, a Kansas City ticket being resold at $173.68, down to Cincinnati at $83.84.",
   },
   {
     id: "market",

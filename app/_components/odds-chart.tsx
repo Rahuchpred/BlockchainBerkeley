@@ -6,8 +6,9 @@ import { Segmented, SegmentedItem } from "@/components/lime/ui/segmented";
 export type ChartPoint = { t: number; v: number };
 export type ChartRange = { label: string; points: ChartPoint[] };
 
-const W = 640;
-const H = 220;
+// Drawn small, so the labels stay readable when the chart sits in a narrow card or on a phone.
+const W = 420;
+const H = 170;
 const PAD = { top: 12, right: 44, bottom: 28, left: 4 };
 
 const dayFormat = new Intl.DateTimeFormat("en-US", {

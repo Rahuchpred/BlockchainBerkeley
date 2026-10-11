@@ -113,15 +113,18 @@ async function EventPageContent({
           </div>
         )}
         <p className="max-w-xl text-sm leading-normal text-fg-2">
-          {own
-            ? `Nobody knows which team ${own.makes} yet, so each seat has one ticket per team.`
-            : "Nobody knows the finalists yet, so each seat has one ticket per team."}
-          {sides.length > 1 &&
+          {/* Once every side is decided there is nothing left to say about not knowing. */}
+          {from !== null &&
+            (own
+              ? `Nobody knows which team ${own.makes} yet, so each seat has one ticket per team.`
+              : "Nobody knows the finalists yet, so each seat has one ticket per team.")}
+          {from !== null &&
+            sides.length > 1 &&
             ` The stadium is split in half: the ${sides[0].name} and the ${sides[1].name} each send one team to the final, so each half has its own teams and its own odds.`}
           {from === null
             ? own
-              ? ` ${own.decided.replace(/^t/, "T")}, so that team's tickets are now real seats.`
-              : " The finalists are decided, so the tickets for them are now real seats."
+              ? `${own.decided.replace(/^t/, "T")}, so that team's tickets are now real seats.`
+              : "The finalists are decided, so the tickets for them are now real seats."
             : ` Tickets start at ${formatAmount(from)}.`}
         </p>
         <div>
