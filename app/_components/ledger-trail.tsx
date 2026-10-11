@@ -16,7 +16,7 @@ export function LedgerTrail({ steps }: { steps: Activity[] }) {
   return (
     <ol className="flex flex-col">
       {steps.map((step, index) => {
-        const { title, detail } = describe(step, RESALE_RATE);
+        const { title } = describe(step, RESALE_RATE);
         const last = index === steps.length - 1;
         return (
           <li key={`${step.at}-${step.kind}`} className="flex gap-3">
@@ -33,10 +33,9 @@ export function LedgerTrail({ steps }: { steps: Activity[] }) {
                 <span aria-hidden="true" className="w-px flex-1 bg-line" />
               )}
             </div>
-            <div className="flex min-w-0 flex-1 flex-col gap-1 pb-6">
-              <p className="text-base leading-snug font-medium">{title}</p>
-              <p className="text-sm leading-normal text-fg-2">{detail}</p>
-              <div className="flex flex-wrap items-center gap-3">
+            <div className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-3 pb-4">
+              <p className="text-sm leading-snug font-medium">{title}</p>
+              <div className="flex items-center gap-3">
                 <span className="text-sm text-fg-3">{formatTime(step.at)}</span>
                 {step.hash && (
                   <Button
@@ -51,7 +50,7 @@ export function LedgerTrail({ steps }: { steps: Activity[] }) {
                       />
                     }
                   >
-                    View on the ledger
+                    Proof
                   </Button>
                 )}
               </div>
