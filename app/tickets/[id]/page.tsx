@@ -7,7 +7,8 @@ import { Button } from "@/components/lime/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/lime/ui/card";
 import { formatAmount } from "@/components/lime/ui/amount";
 import { Icon, ArrowLeft } from "@/components/lime/icon";
-import { formatDate, getEvent, percent, seatLabel } from "@/lib/fairseat/data";
+import { formatDate, percent, seatLabel } from "@/lib/fairseat/data";
+import { findEvent } from "@/lib/fairseat/events";
 import { getHistory } from "@/lib/fairseat/gemini";
 import { viewTicket } from "@/lib/fairseat/live";
 import { readWallet } from "@/lib/fairseat/wallet";
@@ -48,7 +49,7 @@ async function TicketPageContent({
     // A ticket bought from another fan or received as a gift cost its holder something else than the first sale.
     paid: paidFor(record.nftId) ?? record.paid,
   };
-  const view = await viewTicket(ticket, getEvent(ticket.eventId));
+  const view = await viewTicket(ticket, findEvent(ticket.eventId));
   if (!view) notFound();
   const gift = typeof claimed === "string";
   const receipt = typeof bought === "string" ? bought : gift ? claimed : null;

@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import type { FairEvent } from "./data";
 
 // The small amount of state Fairseat keeps beside the ledger. The ledger holds the tickets and the
 // offers themselves; these files only make them quick to look up without scanning every account.
@@ -97,4 +98,11 @@ export function stageResult(ticker: string, team: string | null) {
   if (team) staged[ticker] = team;
   else delete staged[ticker];
   write("market.json", { ...state, staged });
+}
+
+/** The events organizers have listed, after their details passed the page check. */
+export const listedEvents = () => read<FairEvent[]>("events.json", []);
+
+export function saveEvent(event: FairEvent) {
+  write("events.json", [...listedEvents(), event]);
 }

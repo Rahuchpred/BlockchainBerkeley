@@ -12,11 +12,11 @@ import { Icon, ArrowLeft } from "@/components/lime/icon";
 import {
   EVENTS,
   formatDate,
-  getEvent,
   getSeat,
   getSide,
   seatLabel,
 } from "@/lib/fairseat/data";
+import { findEvent } from "@/lib/fairseat/events";
 import { getHistory } from "@/lib/fairseat/gemini";
 import { loadSide } from "@/lib/fairseat/live";
 import { offerFor, soldTicket, ticketKey } from "@/lib/fairseat/store";
@@ -33,7 +33,7 @@ async function SeatPageContent({
   params,
 }: Pick<PageProps<"/events/[id]/seats/[seat]">, "params">) {
   const { id, seat: seatId } = await params;
-  const event = getEvent(id);
+  const event = findEvent(id);
   const seat = event && getSeat(event, seatId);
   const config = event && seat && getSide(event, seat.side);
   if (!event || !seat || !config) notFound();

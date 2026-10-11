@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useState, useTransition } from "react";
 import { Button } from "@/components/lime/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/lime/ui/card";
 import {
@@ -17,15 +18,20 @@ import {
 } from "@/components/lime/ui/select";
 import { Status } from "@/components/lime/ui/status";
 import { formatAmount } from "@/components/lime/ui/amount";
+import { MARKETS as MARKET_INFO } from "@/lib/fairseat/data";
+import type { Check } from "@/lib/fairseat/context";
+import { publishEvent, type PublishResult } from "../actions";
 
-const MARKETS = [
-  { value: "AFCCHAMP27", label: "AFC Championship Winner" },
-  { value: "NFCCHAMP27", label: "NFC Championship Winner" },
-  { value: "ALCHAMP26", label: "American League Champion" },
-  { value: "NLCHAMP26", label: "National League Champion" },
-  { value: "MLSEAST26", label: "MLS Eastern Conference Champion" },
-  { value: "MLSWEST26", label: "MLS Western Conference Champion" },
-];
+const MARKETS = Object.entries(MARKET_INFO).map(([value, info]) => ({
+  value,
+  label: info.label,
+}));
+
+const FIELD: Record<Check["field"], string> = {
+  name: "Name",
+  date: "Date",
+  venue: "Venue",
+};
 
 const marketLabel = (value: string | null) =>
   MARKETS.find((market) => market.value === value)?.label;
@@ -38,7 +44,8 @@ export function EventForm() {
   const [market, setMarket] = useState<string | null>(null);
   const [section, setSection] = useState("");
   const [price, setPrice] = useState("");
-  const [note, setNote] = useState<string | null>(null);
+  const [result, setResult] = useState<PublishResult | null>(null);
+  const [pending, start] = useTransition();
 
   const fullPrice = Number(price);
 
@@ -125,20 +132,77 @@ export function EventForm() {
           </Field>
         </section>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            type="submit"
-            onClick={() => setNote("Publishing is not connected yet")}
-          >
-            Publish event
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setNote("Drafts are not saved yet")}
-          >
-            Save draft
-          </Button>
-          {note && <Status status="queued" label={note} />}
+        <div className="flex max-w-md flex-col gap-3">
+          <div>
+            <Button
+              type="submit"
+              pending={pending}
+              onClick={() =>
+                start(async () => {
+                  setResult(null);
+                  setResult(
+                    await publishEvent({
+                      name,
+                      date,
+                      venue,
+                      link,
+                      market: market ?? "",
+                      section,
+                      price: fullPrice,
+                    }),
+                  );
+                })
+              }
+            >
+              Check and publish
+            </Button>
+          </div>
+          {pending && (
+            <p className="text-sm leading-normal text-fg-2">
+              Reading the official page with Context.dev. This takes a few
+              seconds.
+            </p>
+          )}
+          {result && "error" in result && (
+            <p role="alert" className="text-sm leading-normal text-danger-text">
+              {result.error}
+            </p>
+          )}
+          {result && "checks" in result && (
+            <section className="flex flex-col gap-3">
+              <h2 className="text-lg font-semibold">
+                {result.eventId
+                  ? "Checked and on sale"
+                  : "The page does not match"}
+              </h2>
+              <p className="text-sm leading-normal text-fg-2">
+                {result.eventId
+                  ? `Every detail matches the page at ${result.page}.`
+                  : `The page at ${result.page} says something different. Fix the details below and check again.`}
+              </p>
+              <ul className="flex flex-col gap-2">
+                {result.checks.map((check) => (
+                  <li key={check.field}>
+                    <Status
+                      status={check.ok ? "done" : "failed"}
+                      label={`${FIELD[check.field]}: the page says ${check.found ?? "nothing about it"}`}
+                    />
+                  </li>
+                ))}
+              </ul>
+              {result.eventId && (
+                <div>
+                  <Button
+                    variant="outline"
+                    nativeButton={false}
+                    render={<Link href={`/events/${result.eventId}`} />}
+                  >
+                    View the event
+                  </Button>
+                </div>
+              )}
+            </section>
+          )}
         </div>
       </form>
 

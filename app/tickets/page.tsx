@@ -6,7 +6,8 @@ import {
   EmptyDescription,
   EmptyTitle,
 } from "@/components/lime/ui/empty";
-import { formatDate, getEvent, seatLabel } from "@/lib/fairseat/data";
+import { formatDate, placeOf, seatLabel } from "@/lib/fairseat/data";
+import { findEvent } from "@/lib/fairseat/events";
 import { viewTicket } from "@/lib/fairseat/live";
 import { qrShape } from "@/lib/fairseat/qr";
 import { readWallet } from "@/lib/fairseat/wallet";
@@ -29,7 +30,7 @@ async function Wallet() {
           team: ticket.team,
           paid: ticket.paid,
         },
-        getEvent(ticket.eventId),
+        findEvent(ticket.eventId),
       ),
     ),
   );
@@ -43,7 +44,7 @@ async function Wallet() {
         image: view.outcome.image,
         event: view.event.title,
         date: formatDate(view.event.date),
-        place: `${view.event.venue}, ${view.event.city}`,
+        place: placeOf(view.event),
         seat: seatLabel(view.seat),
         worth: view.worth,
         qr:

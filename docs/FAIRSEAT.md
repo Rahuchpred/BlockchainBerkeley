@@ -173,6 +173,21 @@ Everything runs on the XRPL testnet. Code: `lib/fairseat/xrpl.ts`.
 Not built: burning expired tickets on the ledger, a limit on tickets per wallet, and refunds for a
 seat whose winning-team ticket nobody bought (the organizer keeps that seat to sell).
 
+## How Context.dev is used (live since phase 4)
+
+An organizer cannot put an event on sale until its details match its official page. Code:
+`lib/fairseat/context.ts`.
+
+1. The organizer enters the name, date, venue and the address of the official event page.
+2. Context.dev opens that page and returns the name, date and venue it finds there.
+3. Fairseat compares the two in plain code. Each of the three shows a pass or a fail with what the
+   page says.
+4. Only if all three pass is the event saved and put on sale, with a "Details checked against"
+   badge on its page.
+
+Limits: it trusts whatever page the organizer links, so it does not yet check that the page belongs
+to the real organizer. A listed event has one side, one section and three seats.
+
 ## The demo (2 minutes)
 
 1. Several phones on screen, each holding the same seat for a different team at

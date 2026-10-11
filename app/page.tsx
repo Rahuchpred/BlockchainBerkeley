@@ -1,5 +1,6 @@
 import { Suspense } from "react";
-import { EVENTS, formatDate } from "@/lib/fairseat/data";
+import { formatDate, placeOf } from "@/lib/fairseat/data";
+import { allEvents } from "@/lib/fairseat/events";
 import { fromPrice, loadSides } from "@/lib/fairseat/live";
 import { EventBrowser } from "./_components/event-browser";
 import { PageSkeleton } from "./_components/page-skeleton";
@@ -21,14 +22,14 @@ const STEPS = [
 
 async function Events() {
   const events = await Promise.all(
-    EVENTS.map(async (event) => {
+    allEvents().map(async (event) => {
       const sides = await loadSides(event);
       return {
         id: event.id,
         title: event.title,
         sport: event.sport,
         date: formatDate(event.date),
-        place: `${event.venue}, ${event.city}`,
+        place: placeOf(event),
         // The likeliest teams across both sides, as the card's picture.
         teams: sides
           .flatMap((side) => side.onSale.slice(0, 3))

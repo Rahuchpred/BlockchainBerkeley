@@ -2,7 +2,8 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { Card, CardDescription, CardTitle } from "@/components/lime/ui/card";
-import { formatDate, getEvent, seatLabel } from "@/lib/fairseat/data";
+import { formatDate, seatLabel } from "@/lib/fairseat/data";
+import { findEvent } from "@/lib/fairseat/events";
 import { viewTicket } from "@/lib/fairseat/live";
 import { findOffer } from "@/lib/fairseat/store";
 import { readWallet } from "@/lib/fairseat/wallet";
@@ -25,7 +26,7 @@ async function ClaimPageContent({
       team: offer.team,
       paid: 0,
     },
-    getEvent(offer.eventId),
+    findEvent(offer.eventId),
   );
   if (!view) notFound();
   const hasWallet = (await readWallet()) !== null;

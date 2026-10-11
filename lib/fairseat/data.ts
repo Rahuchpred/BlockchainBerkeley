@@ -39,6 +39,8 @@ export type FairEvent = {
   map: VenueMap;
   sides: Side[];
   seats: Seat[];
+  /** For an event an organizer listed: the site whose page its details were checked against. */
+  checkedAgainst?: string;
 };
 
 /** A ticket a fan holds. The id is the ticket's id on the ledger. */
@@ -54,7 +56,12 @@ export type Ticket = {
 /** The share of each sale Fairseat keeps. */
 export const FEE_RATE = 0.025;
 
-const seats = (side: string, section: string, faceValue: number): Seat[] =>
+/** Three seats in one section, all at the same full price. */
+export const seats = (
+  side: string,
+  section: string,
+  faceValue: number,
+): Seat[] =>
   [
     ["3", "12"],
     ["3", "13"],
@@ -117,7 +124,6 @@ export const slug = (team: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 
-export const getEvent = (id: string) => EVENTS.find((event) => event.id === id);
 export const getSeat = (event: FairEvent, seatId: string) =>
   event.seats.find((seat) => seat.id === seatId);
 export const getSide = (event: FairEvent, sideId: string) =>
@@ -129,6 +135,41 @@ export const priceFor = (seat: Seat, share: number) =>
 
 export const feeFor = (price: number) =>
   Math.round(price * FEE_RATE * 100) / 100;
+
+/** The venue and, when known, its city. */
+export const placeOf = (event: FairEvent) =>
+  event.city ? `${event.venue}, ${event.city}` : event.venue;
+
+/** The markets an organizer can price an event with, and the kind of venue each one implies. */
+export const MARKETS: Record<
+  string,
+  { label: string; sport: Sport; side: string; map: VenueMap }
+> = {
+  AFCCHAMP27: {
+    label: "AFC Championship Winner",
+    sport: "Football",
+    side: "AFC side",
+    map: { field: "football", rings: [{ first: 101, count: 40 }] },
+  },
+  NFCCHAMP27: {
+    label: "NFC Championship Winner",
+    sport: "Football",
+    side: "NFC side",
+    map: { field: "football", rings: [{ first: 101, count: 40 }] },
+  },
+  ALCHAMP26: {
+    label: "American League Champion",
+    sport: "Baseball",
+    side: "American League side",
+    map: { field: "baseball", rings: [{ first: 1, count: 48 }] },
+  },
+  NLCHAMP26: {
+    label: "National League Champion",
+    sport: "Baseball",
+    side: "National League side",
+    map: { field: "baseball", rings: [{ first: 1, count: 48 }] },
+  },
+};
 
 export const seatLabel = (seat: Seat) =>
   `Section ${seat.section}, row ${seat.row}, seat ${seat.seat}`;

@@ -1,6 +1,6 @@
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { EVENTS } from "@/lib/fairseat/data";
+import { allEvents } from "@/lib/fairseat/events";
 import { getMarket } from "@/lib/fairseat/gemini";
 import { stagedResult } from "@/lib/fairseat/store";
 import { PageSkeleton } from "../_components/page-skeleton";
@@ -11,21 +11,25 @@ import {
 
 async function DemoContent() {
   await connection();
+  // Two events can share a market, and a market settles once for both.
+  const seen = new Set<string>();
   const sides = await Promise.all(
-    EVENTS.flatMap((event) =>
-      event.sides.map(async (side): Promise<SettleSide> => {
-        const market = await getMarket(side.market);
-        return {
-          market: side.market,
-          event: event.title,
-          name: side.name,
-          teams: market.outcomes
-            .filter((outcome) => !outcome.eliminated && outcome.share > 0)
-            .map((outcome) => outcome.team),
-          staged: market.settled ?? stagedResult(side.market),
-          final: market.settled !== null,
-        };
-      }),
+    allEvents().flatMap((event) =>
+      event.sides
+        .filter((side) => !seen.has(side.market) && seen.add(side.market))
+        .map(async (side): Promise<SettleSide> => {
+          const market = await getMarket(side.market);
+          return {
+            market: side.market,
+            event: event.title,
+            name: side.name,
+            teams: market.outcomes
+              .filter((outcome) => !outcome.eliminated && outcome.share > 0)
+              .map((outcome) => outcome.team),
+            staged: market.settled ?? stagedResult(side.market),
+            final: market.settled !== null,
+          };
+        }),
     ),
   );
 

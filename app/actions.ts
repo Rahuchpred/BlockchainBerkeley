@@ -3,12 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
+  MARKETS,
   feeFor,
-  getEvent,
   getSeat,
   getSide,
   priceFor,
+  seats,
+  slug,
 } from "@/lib/fairseat/data";
+import { findEvent } from "@/lib/fairseat/events";
+import { checkEventPage, type Check } from "@/lib/fairseat/context";
 import { loadSide } from "@/lib/fairseat/live";
 import {
   clearOffer,
@@ -16,6 +20,7 @@ import {
   offerFor,
   recordPaid,
   recordSale,
+  saveEvent,
   saveOffer,
   soldTicket,
   stageResult,
@@ -62,7 +67,7 @@ export async function buyTeamTicket(
   let nftId: string;
   let hash: string;
   try {
-    const event = getEvent(eventId);
+    const event = findEvent(eventId);
     const seat = event && getSeat(event, seatId);
     const config = event && seat && getSide(event, seat.side);
     if (!event || !seat || !config)
@@ -191,4 +196,66 @@ export async function stageSettlement(
 ): Promise<void> {
   stageResult(ticker, team);
   revalidatePath("/", "layout");
+}
+
+export type NewEvent = {
+  name: string;
+  date: string;
+  venue: string;
+  link: string;
+  market: string;
+  section: string;
+  price: number;
+};
+
+export type PublishResult =
+  { error: string } | { checks: Check[]; page: string; eventId: string | null };
+
+/** Checks an organizer's event against its official page and, if every detail matches, puts it on sale. */
+export async function publishEvent(input: NewEvent): Promise<PublishResult> {
+  const name = input.name.trim();
+  const venue = input.venue.trim();
+  const market = MARKETS[input.market];
+  if (!name || !venue || !/^\d{4}-\d{2}-\d{2}$/.test(input.date))
+    return { error: "Fill in the event name, date and venue" };
+  if (!market) return { error: "Choose a Gemini market" };
+  if (!(input.price > 0) || input.price > 100_000)
+    return { error: "Enter a full seat price between $1 and $100,000" };
+  const ring = market.map.rings[0];
+  const section = Number(input.section);
+  if (
+    !Number.isInteger(section) ||
+    section < ring.first ||
+    section >= ring.first + ring.count
+  )
+    return {
+      error: `Enter a section from ${ring.first} to ${ring.first + ring.count - 1}`,
+    };
+  const id = `${slug(name)}-${input.date}`;
+  if (findEvent(id)) return { error: "This event is already listed" };
+
+  const result = await checkEventPage(input.link, {
+    name,
+    date: input.date,
+    venue,
+  });
+  if ("error" in result) return result;
+  if (!result.ok)
+    return { checks: result.checks, page: result.page, eventId: null };
+
+  saveEvent({
+    id,
+    title: name,
+    sport: market.sport,
+    date: input.date,
+    venue,
+    city: "",
+    officialUrl: input.link,
+    map: market.map,
+    sides: [{ id: "side", name: market.side, market: input.market }],
+    seats: seats("side", String(section), Math.round(input.price * 100) / 100),
+    checkedAgainst: result.page,
+  });
+  revalidatePath("/", "layout");
+  return { checks: result.checks, page: result.page, eventId: id };
 }

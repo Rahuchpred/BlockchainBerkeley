@@ -9,13 +9,13 @@ import {
   EVENTS,
   feeFor,
   formatDate,
-  getEvent,
   getSeat,
   getSide,
   percent,
   priceFor,
   seatLabel,
 } from "@/lib/fairseat/data";
+import { findEvent } from "@/lib/fairseat/events";
 import { loadSide } from "@/lib/fairseat/live";
 import { offerFor, soldTicket, ticketKey } from "@/lib/fairseat/store";
 import { readWallet } from "@/lib/fairseat/wallet";
@@ -62,7 +62,7 @@ async function ReviewPageContent({
   params,
 }: Pick<PageProps<"/events/[id]/seats/[seat]/buy/[team]">, "params">) {
   const { id, seat: seatId, team } = await params;
-  const event = getEvent(id);
+  const event = findEvent(id);
   const seat = event && getSeat(event, seatId);
   const config = event && seat && getSide(event, seat.side);
   if (!event || !seat || !config) notFound();

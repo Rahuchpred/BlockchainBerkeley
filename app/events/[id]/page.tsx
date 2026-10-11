@@ -1,14 +1,16 @@
 import { Suspense } from "react";
+import { Badge } from "@/components/lime/ui/badge";
 import { notFound } from "next/navigation";
 import { formatAmount } from "@/components/lime/ui/amount";
 import {
   EVENTS,
   formatDate,
-  getEvent,
+  placeOf,
   priceFor,
   seatLabel,
   type Seat,
 } from "@/lib/fairseat/data";
+import { findEvent } from "@/lib/fairseat/events";
 import { fromPrice, loadSides, type LiveSide } from "@/lib/fairseat/live";
 import { SeatFinder } from "../../_components/seat-finder";
 import type { SectionInfo } from "../../_components/stadium-map";
@@ -29,7 +31,7 @@ async function EventPageContent({
   params,
 }: Pick<PageProps<"/events/[id]">, "params">) {
   const { id } = await params;
-  const event = getEvent(id);
+  const event = findEvent(id);
   if (!event) notFound();
 
   const sides = await loadSides(event);
@@ -68,8 +70,13 @@ async function EventPageContent({
       <header className="flex flex-col gap-2">
         <h1 className="title-page">{event.title}</h1>
         <p className="text-base text-fg-2">
-          {formatDate(event.date)} at {event.venue}, {event.city}
+          {formatDate(event.date)} at {placeOf(event)}
         </p>
+        {event.checkedAgainst && (
+          <div>
+            <Badge variant="success">{`Details checked against ${event.checkedAgainst}`}</Badge>
+          </div>
+        )}
         <p className="max-w-xl text-sm leading-normal text-fg-2">
           Nobody knows the finalists yet, so each seat has one ticket per team.
           {from === null
