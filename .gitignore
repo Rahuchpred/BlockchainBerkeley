@@ -48,3 +48,4 @@ next-env.d.ts
 
 # Other sessions keep their own checkouts here.
 /.claude/worktrees
+.env*.local

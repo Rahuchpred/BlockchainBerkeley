@@ -2,104 +2,157 @@
 
 One seat at a final, sold once per team. The playoffs decide who sits in it.
 
-Tickets for a final go on sale before anyone knows who is playing. You pay full price and hope.
+**Live:** https://fairseat-lac.vercel.app
+
+Built at the Blockchain at Berkeley hackathon. Runs on the XRP Ledger Testnet.
+
+## The idea
+
+Tickets for a final go on sale before anyone knows who is playing. Fans pay full price and hope.
+
 Fairseat sells the same seat once for every team that could still get there. You buy "this seat, if
-my team makes the final". Your ticket costs the seat's full price times your team's share of the
-live odds. When the finalists are decided, the winning team's ticket becomes the seat and the rest
-expire.
+my team makes the final". The ticket costs the seat's full price times your team's live chance of
+getting there. When the finalists are decided, the winning team's ticket becomes the seat and the
+others expire.
 
-Built for the Blockchain at Berkeley hackathon. Runs on the XRPL **Testnet**.
+A $1,000 seat with four teams still alive:
 
-## How a seat is priced
+| Team | Live chance | Ticket |
+| ---- | ----------- | ------ |
+| A    | 50%         | $500   |
+| B    | 30%         | $300   |
+| C    | 15%         | $150   |
+| D    | 5%          | $50    |
 
-A $1,000 seat with four teams still alive on its side:
+The four tickets add up to $1,000, so the club is paid in full whoever wins. The fan whose team
+makes it sits in a $1,000 seat for their team's share.
 
-| Team | Odds | Ticket |
-| ---- | ---- | ------ |
-| A    | 50%  | $500   |
-| B    | 30%  | $300   |
-| C    | 15%  | $150   |
-| D    | 5%   | $50    |
+## Try it in two minutes
 
-The four tickets always add up to $1,000, so the organizer is paid in full whoever wins. The fan
-whose team makes it sits in a $1,000 seat for their team's share. Nobody is refunded for a team that
-misses: that is why the ticket was cheap. Any ticket can be resold before then.
+Open https://fairseat-lac.vercel.app and log in. There are no passwords.
 
-## What the XRP Ledger does
+| Log in as | You are | You can |
+| --------- | ------- | ------- |
+| `Mike` | A fan | Browse events, buy, resell, send a ticket to a friend |
+| `GSW`, `BOS`, `LAL` or any NBA team code | A club | Release your own tickets and see what they earned |
+| `Fairseat` | The organizer of the other events | See the dashboard, list an event, settle a result |
 
-Six XRPL features work together. The code is in [`lib/fairseat/xrpl.ts`](lib/fairseat/xrpl.ts).
+The full loop, with two browser windows:
 
-| Feature | What it does here |
-| ------- | ----------------- |
-| **NFTs** (XLS-20) | Each ticket is an NFT naming the event, the seat and the team. It sits in the fan's wallet. |
-| **Issued token and trust lines** | Fans pay in a test dollar issued on the ledger. |
-| **Token Escrow** (XLS-85) | A fan's payment is locked in an escrow for the organizer. It is released only when the finalists are decided. If it never is, the fan can take it back a month after the event. |
-| **Batch** (XLS-56) | Buying is one all-or-nothing Batch: the fan's dollars go into escrow and the ticket moves to the fan, or neither happens. Settling a market is one Batch too. |
-| **NFT offers** | A resale is one swap between two fans: the ticket and the money move in the same transaction. A gift is the same offer at a price of 0. |
-| **NFT transfer fee** | The ledger pays the organizer 5% of every resale. No marketplace can skip it. |
+1. Log in as `BOS`. Pick a section on the arena map, pick seats, press **Release**. The tickets are
+   minted on the ledger from Boston's own wallet.
+2. In the other window log in as `Mike`. Open **NBA Finals, Game 1**, pick that seat, pick Boston,
+   and pay. A wallet with 5,000 test dollars is made for you on the first purchase.
+3. Open the ticket. Press **Proof** to see the transaction, with a link to the public ledger
+   explorer.
+4. Open `/gate` and paste the ticket's code. The gate reads the ledger and answers.
 
-### The life of a ticket
+## How we used each sponsor
 
-1. **Mint.** The organizer mints the ticket with an offer only the buyer can take (`NFTokenMint`
-   with `Destination`).
-2. **Buy.** The fan submits one `Batch` holding an `EscrowCreate` (the price, locked with a
-   condition, for the organizer) and an `NFTokenAcceptOffer` (the ticket).
-3. **Resell or send.** The holder makes an `NFTokenCreateOffer`. Another fan accepts it. The seller
-   gets the price minus the organizer's 5%.
-4. **Settle.** When the market settles, the organizer submits one `Batch` of `EscrowFinish` (release
-   every payment for that side) and `NFTokenBurn` (remove the tickets for teams that missed out).
-   Each escrow and ticket is then read back from the ledger, and only what really happened is
-   recorded.
+### Ripple: the XRP Ledger
 
-Example transactions on Testnet:
+Everything that matters happens on the ledger. Code: [`lib/fairseat/xrpl.ts`](lib/fairseat/xrpl.ts).
 
-- Buy, as one Batch: [ADE3B4E3...](https://testnet.xrpl.org/transactions/ADE3B4E3D512B0B12EB56227E4270817ABBC09F13A6232CD797359722E587159)
-- Settle, as one Batch: [4ECDF259...](https://testnet.xrpl.org/transactions/4ECDF25943B33B2C86288D34C00F92A9B5472E591DCA047DF01B0ED9231CB9F9)
+| XRPL feature | What it does in Fairseat |
+| ------------ | ------------------------ |
+| **NFTs** (XLS-20) | Every ticket is an NFT that names the event, the seat and the team. It sits in the fan's own wallet. |
+| **Token Escrow** (XLS-85) | The fan's payment is locked in an escrow under a crypto-condition. It is released to the club only when the finalists are decided. If it is never released, the fan can take it back after the deadline. |
+| **Batch** (XLS-56) | Buying is one all-or-nothing Batch: the money goes into escrow and the ticket moves to the fan, or neither happens. Up to four neighbouring seats are bought in one Batch. Clubs mint eight tickets per Batch. Settling is a Batch too. |
+| **NFT offers** | A resale is one swap between two fans: ticket and money move in the same transaction. Sending a ticket to a friend is the same offer at a price of 0. |
+| **NFT transfer fee** | The ledger itself pays the club 5% of every resale. No marketplace can skip it. |
+| **Issued token and trust lines** | Fans pay in a dollar token issued on the ledger. |
+| **Credentials** | An organizer whose event passes the page check gets a verified-organizer credential on the ledger. |
 
-### NBA: one organizer wallet per team
+**Each club has its own wallet.** The 30 NBA clubs are the organizers. Each one has its own ledger
+account with its own keys. It mints its own tickets, and its fans' escrows are made out to it.
 
-For the NBA event, each of the 30 teams sells its own tickets from its own organizer account on the
-ledger. The other events still use the single organizer account.
+**The life of a ticket**
 
-1. **Release.** A team's organizer mints its tickets into its own account, up to eight in one
-   `Batch` of `NFTokenMint`. A ticket is on sale only once its team has released it.
-2. **Buy.** The team's organizer offers the ticket to the buyer alone (`NFTokenCreateOffer` with
-   `Destination`). The fan's `Batch` is the same as before, with the escrow made out to the team's
-   account.
-3. **Settle.** Each team's organizer releases its own escrows and burns its own expired tickets,
-   sold or not.
+1. **Release.** The club mints the ticket into its own account (`NFTokenMint`, up to eight in one
+   `Batch`).
+2. **Buy.** The club offers the ticket to the buyer alone (`NFTokenCreateOffer` with `Destination`).
+   The fan submits one `Batch`: an `EscrowCreate` for the price and an `NFTokenAcceptOffer` for the
+   ticket.
+3. **Resell or send.** The holder makes an `NFTokenCreateOffer` and another fan accepts it. The
+   seller gets the price less the club's 5%.
+4. **Settle.** When the result is known, the club submits a `Batch` of `EscrowFinish` (release the
+   payments) and `NFTokenBurn` (remove the tickets of teams that missed out). Every escrow and
+   ticket is then read back from the ledger, and only what really happened is recorded.
+5. **Gate.** The gate reads the ledger to see who holds the ticket and whether it is the winning
+   one.
 
-The 30 accounts have separate keys, worked out from `XRPL_ORGANIZER_SEED` and the team, so there
-are no further seeds to store. The buyer and the organizers are separate accounts with their own
-pages, and the organizer side is on a beige page so the two are not mistaken for each other. The
-login page asks for a username and no password: `Mike` is the buyer, a team's code such as `GSW`
-is that team's organizer and opens its team desk at `/organizer/nba`, and `Fairseat` is the
-organizer of the other events. `proxy.ts` keeps each account on its own pages.
+**Real transactions from our testing, on the public Testnet explorer**
 
-Gemini has one NBA market, for the champion, and none per conference. Each conference's side is
-that market cut down to its 15 teams, with their title chances shared out between them. That stands
-in for the chance of reaching the Finals and is not the same number.
+- A fan buys a Golden State ticket, as one Batch: [783A63B2...](https://testnet.xrpl.org/transactions/783A63B255CCD799EEA19915DD96E8C8448091E9D492EECF667734C3DF269C77)
+- A second fan buys that ticket on resale: [CDF12BE3...](https://testnet.xrpl.org/transactions/CDF12BE314407112995FFEE61EC0EB2B2FD84F655AE3E14E6EBE1F28CFD385E3)
+- A settlement, as one Batch: [4ECDF259...](https://testnet.xrpl.org/transactions/4ECDF25943B33B2C86288D34C00F92A9B5472E591DCA047DF01B0ED9231CB9F9)
 
-### Why not RLUSD
+Every step in the app has its own proof page that shows the transaction as the ledger recorded it.
 
-We wanted to price tickets in RLUSD. On Testnet the RLUSD issuer has not switched on the setting
-that lets its token be held in an escrow (`allowTrustLineLocking`), so an `EscrowCreate` in RLUSD is
-refused. Fairseat issues its own test dollar with that setting on. Swapping to RLUSD is a change of
-one currency and issuer once the setting is enabled.
+### Gemini Prediction Markets API
 
-## What the other sponsors do
+The odds are the product. Code: [`lib/fairseat/gemini.ts`](lib/fairseat/gemini.ts).
 
-- **Gemini prediction markets.** Each team's live odds of reaching the final set every ticket price,
-  draw the charts, and decide which ticket becomes the seat when the market settles. Read from the
-  public market data API. Code: [`lib/fairseat/gemini.ts`](lib/fairseat/gemini.ts).
-- **Context.dev.** An organizer cannot put an event on sale until it passes three checks. Code:
-  [`lib/fairseat/context.ts`](lib/fairseat/context.ts).
-  1. The official page they link is read, and its name, date and venue must match what they typed.
-  2. A separate search of the web, done without their page, must not contradict the date or venue.
-     A made-up page can say anything, but it cannot change what the rest of the web says.
-  3. The owner of the site the page is on is looked up and shown.
+- **Every price comes from a live market.** A ticket costs the seat's full price times the team's
+  share of the live odds on Gemini.
+- **Prices are worked out on the server when you pay.** The browser never sets a price.
+- **Prices move on screen.** The seat page asks for fresh odds every 15 seconds. When a number
+  changes it rolls to the new figure and is tinted green or red.
+- **Price history draws the charts.** Each team's chance over the last week and month, and all
+  teams on one chart on the market page.
+- **The market decides the winner.** When a Gemini market settles, that team's tickets become seats.
+- **Six markets price real events:** the AFC and NFC champions, the American and National League
+  champions, the Champions League winner, and the NBA champion, which we split into an Eastern and
+  a Western side so each half of the arena has its own odds.
+- **More markets are shown live** on the events page, each with the reason it does not sell seats
+  yet.
 
-## Run it
+### Context.dev
+
+It keeps fake events off the site. Code: [`lib/fairseat/context.ts`](lib/fairseat/context.ts).
+
+An organizer cannot put an event on sale until it passes three checks:
+
+1. The official page they link is read. Its name, date and venue must match what they typed.
+2. A separate search of the web, done without their page, must agree on the date and venue. A
+   made-up page can say anything, but it cannot change what the rest of the web says.
+3. The owner of the site the page is on is looked up and shown.
+
+Try it: log in as `Fairseat`, open **List an event**, and enter a wrong date.
+
+## Why this is real and not a mock-up
+
+- **Nothing is hard-coded.** Odds, prices, balances, tickets and payments are read live.
+- **Every action is a real transaction.** Releasing, buying, reselling, sending, refunding and
+  settling each write to the XRP Ledger, and each has a public proof link.
+- **The ledger is the source of truth.** A fan's tickets are read from their wallet on the ledger.
+  The gate reads the ledger. After every Batch the result is read back before anything is recorded.
+- **It is fair by rule.** One wallet can hold at most 4 tickets for a team in an event, and a resale
+  can ask at most 150% of today's price. See [`lib/fairseat/rules.ts`](lib/fairseat/rules.ts).
+- **It is tested with several accounts at once.** In one run, two clubs released tickets from two
+  wallets, a fan bought one, resold it to a second fan in another browser, and the gate found it
+  with its new holder. The hosted site showed all of it.
+
+## Pages
+
+| Page | What it is |
+| ---- | ---------- |
+| `/` | Home |
+| `/login` | Log in as a fan, a club or the organizer |
+| `/events` | Events with live odds |
+| `/events/[id]` | The stadium map and its seats |
+| `/events/[id]/seats/[seat]` | One ticket per team, with live prices and resales |
+| `/events/[id]/market` | Every team's odds on one chart |
+| `/tickets` and `/tickets/[id]` | Your tickets, read from the ledger: worth over time, sell, send |
+| `/wallet` | Balance, money locked in escrow, every step with its transaction |
+| `/organizer/nba` | The club desk: release tickets on the arena map, see sales and the club's wallet |
+| `/organizer` | The organizer's dashboard: sales and where the money is on the ledger |
+| `/organizer/new` | List an event, behind the Context.dev checks |
+| `/gate` | Check a ticket at the gate |
+| `/proof/[hash]` | One transaction, as the ledger recorded it |
+| `/demo` | Stage a result and settle it on the ledger |
+
+## Run it yourself
 
 Needs Node 22 or later.
 
@@ -114,13 +167,6 @@ Make the two Testnet accounts. This writes their seeds to `.env.local`:
 node --env-file-if-exists=.env.local scripts/setup-xrpl.mjs
 ```
 
-Optionally open the 30 NBA teams' organizer accounts now. Without this, a team's account is opened
-the first time it releases tickets, which takes about 20 seconds longer:
-
-```bash
-node --env-file-if-exists=.env.local scripts/setup-nba.mjs
-```
-
 Add a Context.dev key to `.env.local` as `CONTEXT_DEV_API_KEY` (only needed for listing an event).
 Then:
 
@@ -128,61 +174,11 @@ Then:
 npm run dev
 ```
 
-Open http://localhost:3000.
-
-## Try it
-
-1. Log in as `Mike`. Press **Get a test wallet**. It is funded from the Testnet faucet and given 5,000 test dollars.
-   This takes about half a minute.
-2. Open an event, pick a section on the stadium map, then a seat.
-3. Pick a team and pay. The receipt links to the Batch on the Testnet explorer.
-4. On the ticket page, list it for sale at your own price, or send it to a friend with a claim link.
-5. Open `/demo` to stand in for the day a market settles. Pick the team that makes the final: its
-   tickets turn into seats with a gate code and the rest expire. **Settle on the ledger** then
-   releases the escrows and burns the expired tickets.
-6. Open **List an event** to see the Context.dev checks. Try a wrong date first.
-7. For the NBA event, log out and log in as a team, such as `GSW`. Release its tickets for a
-   section on the team desk. Log back in as `Mike`: that team's tickets for those seats can now be
-   bought, and the money is held for the team's own wallet.
-
-## Pages
-
-| Page | What it is |
-| ---- | ---------- |
-| `/` | Home, with a live preview of one event |
-| `/events` | Events, with live odds |
-| `/events/[id]` | Stadium map and seats |
-| `/events/[id]/seats/[seat]` | One ticket per team, with live prices and resales |
-| `/tickets` | The tickets in your wallet, read from the ledger |
-| `/tickets/[id]` | One ticket: its worth over time, sell, send, and its trail on the ledger |
-| `/claim/[offer]` | Claim a ticket a friend sent |
-| `/events/[id]/market` | Every team's odds on one chart, today's movers, recent sales |
-| `/wallet` | Balance, money locked in escrow, and every step with its transaction |
-| `/organizer` | What each event has sold and where the money is on the ledger |
-| `/organizer/new` | List an event, behind the Context.dev checks |
-| `/organizer/nba` | The team desk: release the team's tickets and see what it has sold |
-| `/login` | Log in as the buyer, a team or the house organizer, by username alone |
-| `/demo` | Stage a result and settle it on the ledger |
-
-## Limits
-
-- Testnet only. The dollar is a test token and the wallets hold nothing of value.
-- A fan's wallet seed is kept in an httpOnly cookie. That is fine for a testnet demo and not how a
-  real wallet should be held.
-- Sold tickets, open offers and listed events are indexed in a local `.data` folder. The tickets and
-  the money themselves are on the ledger.
-- One wallet can hold at most 4 tickets for the same team in an event, and a resale can ask at most
-  150% of what the ticket costs new at that moment. Both are checked by the server, not by the
-  ledger. The numbers are in [`lib/fairseat/rules.ts`](lib/fairseat/rules.ts).
-- A fan who takes a payment back after the deadline gives up the ticket: the organizer burns it and
-  the seat goes back on sale. A fan who has sold the ticket or given it away cannot take the payment
-  back in the app. The cancel and the burn are two transactions, not one.
-- Logging in takes a username and no password, so the accounts show who is who and protect
-  nothing. The club wallets are held by the server, like the single organizer's.
-- Finals played at the teams' home arenas need a second condition (the home team must also make it).
-  The events here are treated as neutral venues.
+Open http://localhost:3000 and log in as `Mike`, a team code, or `Fairseat`.
 
 ## Built with
 
-Next.js 16, the Lime design system, Tailwind CSS, and xrpl.js. More on the idea and the decisions
-behind it in [`docs/FAIRSEAT.md`](docs/FAIRSEAT.md).
+Next.js 16, xrpl.js, Tailwind CSS, the Lime design system, Inter, Motion with a component from
+interior.dev for the live numbers, and Upstash Redis for the shared ticket index. Hosted on Vercel.
+
+More on the idea and the decisions behind it in [`docs/FAIRSEAT.md`](docs/FAIRSEAT.md).
