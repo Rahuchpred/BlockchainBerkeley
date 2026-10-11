@@ -1,27 +1,20 @@
 import Link from "next/link";
-import { Suspense } from "react";
 import { Button } from "@/components/lime/ui/button";
-import { Skeleton } from "@/components/lime/ui/skeleton";
-import { priceFor } from "@/lib/fairseat/data";
-import { allEvents } from "@/lib/fairseat/events";
-import { loadSides } from "@/lib/fairseat/live";
-import {
-  HeroPreview,
-  type PreviewSection,
-  type PreviewTeam,
-} from "./_components/hero-preview";
-import type { SectionInfo } from "./_components/stadium-map";
+import { HeroShowcase } from "./_components/hero-showcase";
 
 const STEPS = [
   {
+    label: "01",
     title: "Pick a seat",
     text: "Choose a section on the stadium map, then a seat in it. Every seat has one ticket for each team that could still get there.",
   },
   {
+    label: "02",
     title: "Pick your team",
     text: "Your ticket costs the seat's full price times your team's share of the live odds. A long shot costs a few dollars.",
   },
   {
+    label: "03",
     title: "Wait for the final",
     text: "If your team gets there, your ticket becomes the seat. You can resell it at your own price any time before.",
   },
@@ -29,77 +22,60 @@ const STEPS = [
 
 const BUILT_ON = [
   {
-    name: "Gemini",
-    job: "Sets the price",
+    label: "Gemini",
+    title: "Sets the price",
     text: "Live prediction market odds decide what each team's ticket costs, and which ticket wins the seat.",
   },
   {
-    name: "XRP Ledger",
-    job: "Holds the ticket and the money",
+    label: "XRP Ledger",
+    title: "Holds the ticket and the money",
     text: "Your payment is locked in escrow and the ticket moves to you in one step. Resales pay the organizer 5%.",
   },
   {
-    name: "Context.dev",
-    job: "Checks the event is real",
+    label: "Context.dev",
+    title: "Checks the event is real",
     text: "An event goes on sale only if its details match its official page and the rest of the web.",
   },
 ];
 
-/** The first event, live, as the page's picture. */
-async function Preview() {
-  const event = allEvents()[0];
-  if (!event) return null;
-  const sides = await loadSides(event);
+type Point = { label: string; title: string; text: string };
 
-  const info: Record<string, SectionInfo> = {};
-  const sections: Record<string, PreviewSection> = {};
-  for (const seat of event.seats) {
-    const side = sides.find((item) => item.id === seat.side);
-    if (!side || side.onSale.length === 0) continue;
-    const cheapest = Math.min(
-      ...side.onSale.map((outcome) => priceFor(seat, outcome.share)),
-    );
-    const known = info[seat.section];
-    info[seat.section] = {
-      seats: (known?.seats ?? 0) + 1,
-      from: known?.from == null ? cheapest : Math.min(known.from, cheapest),
-    };
-    sections[seat.section] ??= {
-      side: seat.side,
-      faceValue: seat.faceValue,
-      href: `/events/${event.id}/seats/${seat.id}`,
-    };
-  }
-  if (Object.keys(sections).length === 0) return null;
-
-  const teams: Record<string, PreviewTeam[]> = Object.fromEntries(
-    sides.map((side) => [
-      side.id,
-      side.onSale.map((outcome) => ({
-        team: outcome.team,
-        share: outcome.share,
-        tone: outcome.tone,
-        image: outcome.image,
-      })),
-    ]),
-  );
-
+/** A titled row of three cards. Every section under the hero is one of these. */
+function Points({
+  id,
+  title,
+  points,
+}: {
+  id?: string;
+  title: string;
+  points: Point[];
+}) {
   return (
-    <HeroPreview
-      title={event.title}
-      eventHref={`/events/${event.id}`}
-      map={event.map}
-      info={info}
-      sections={sections}
-      teams={teams}
-      split={sides.length > 1}
-    />
+    <section id={id} className="flex scroll-mt-20 flex-col gap-8">
+      <h2 className="text-2xl font-semibold tracking-tight">{title}</h2>
+      <ul className="grid gap-4 sm:grid-cols-3">
+        {points.map((point) => (
+          <li
+            key={point.title}
+            className="flex flex-col gap-2 rounded-panel bg-surface p-6"
+          >
+            <span className="pb-4 text-sm font-medium text-fg-2 tabular-nums">
+              {point.label}
+            </span>
+            <span className="text-lg font-semibold">{point.title}</span>
+            <span className="text-base leading-normal text-fg-2">
+              {point.text}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
 export default function Home() {
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-16 px-4 pt-10 pb-16 sm:px-6 sm:pt-16">
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-24 px-4 pt-12 pb-24 sm:px-6 sm:pt-20">
       <section className="flex flex-col items-center gap-6 text-center">
         <h1 className="max-w-3xl text-3xl leading-tight font-semibold tracking-tight">
           One seat. Sold once per team.
@@ -126,55 +102,17 @@ export default function Home() {
             How it works
           </Button>
         </div>
-        <div className="w-full pt-4">
-          <Suspense fallback={<Skeleton shape="block" className="h-96" />}>
-            <Preview />
-          </Suspense>
+        <div className="w-full pt-6">
+          <HeroShowcase />
         </div>
       </section>
 
-      <section id="how-it-works" className="flex scroll-mt-20 flex-col gap-6">
-        <h2 className="text-2xl font-semibold tracking-tight">How it works</h2>
-        <ol className="grid gap-6 sm:grid-cols-3">
-          {STEPS.map((step, index) => (
-            <li
-              key={step.title}
-              className="flex flex-col gap-2 border-t border-line-strong pt-4"
-            >
-              <span className="font-mono text-sm text-fg-3">
-                {String(index + 1).padStart(2, "0")}
-              </span>
-              <span className="text-lg font-semibold">{step.title}</span>
-              <span className="text-base leading-normal text-fg-2">
-                {step.text}
-              </span>
-            </li>
-          ))}
-        </ol>
-      </section>
+      <Points id="how-it-works" title="How it works" points={STEPS} />
 
-      <section className="flex flex-col gap-6">
-        <h2 className="text-2xl font-semibold tracking-tight">
-          What it runs on
-        </h2>
-        <ul className="grid gap-4 sm:grid-cols-3">
-          {BUILT_ON.map((item) => (
-            <li
-              key={item.name}
-              className="flex flex-col gap-2 rounded-panel bg-surface p-4"
-            >
-              <span className="text-sm text-fg-2">{item.name}</span>
-              <span className="text-lg font-semibold">{item.job}</span>
-              <span className="text-base leading-normal text-fg-2">
-                {item.text}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <Points title="What it runs on" points={BUILT_ON} />
 
-      <section className="flex flex-col items-center gap-6 py-8 text-center">
-        <h2 className="max-w-2xl text-2xl leading-tight font-semibold tracking-tight sm:text-3xl">
+      <section className="flex flex-col items-center gap-8 text-center">
+        <h2 className="max-w-2xl text-2xl leading-tight font-semibold tracking-tight">
           Only pay for the chance your team gets there.
         </h2>
         <div className="flex flex-wrap justify-center gap-3">
