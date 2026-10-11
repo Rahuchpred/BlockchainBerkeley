@@ -34,12 +34,57 @@ function wedge(ring: number, rings: number, index: number, count: number) {
   const middle = (from + to) / 2;
   return {
     path: `M${at(outer.x, outer.y, from)}A${outer.x} ${outer.y} 0 0 1 ${at(outer.x, outer.y, to)}L${at(inner.x, inner.y, to)}A${inner.x} ${inner.y} 0 0 0 ${at(inner.x, inner.y, from)}Z`,
-    // The price tag sits one ring further out than its section, so the section itself stays visible.
-    tag: {
-      x: CX + (outer.x + depth.x / 2 + RING_GAP) * Math.cos(rad(middle)),
-      y: CY + (outer.y + depth.y / 2 + RING_GAP) * Math.sin(rad(middle)),
-    },
+    tag: tagFor(inner, outer, middle),
   };
+}
+
+/** Half the width and height of a price tag, and the space kept between it and its section. */
+const TAG = { x: 44, y: 13 };
+const TAG_GAP = 8;
+/** How much larger the tag is drawn on a phone. See the tag's group in StadiumMap. */
+const TAG_PHONE = 1.5;
+
+/**
+ * Where a section's price tag goes: just outside the section's outer edge, pushed out by however
+ * much of the tag points back at the section, so the tag never covers it and never drifts away.
+ * A section at the rim of the picture has no room outside, so its tag goes just inside instead.
+ * The origin is the side of the tag that faces the section, so a larger tag grows away from it.
+ */
+function tagFor(
+  inner: { x: number; y: number },
+  outer: { x: number; y: number },
+  angle: number,
+) {
+  const cos = Math.cos(rad(angle));
+  const sin = Math.sin(rad(angle));
+  const place = (edge: { x: number; y: number }, away: 1 | -1) => {
+    // The direction straight out of the bowl's edge at this angle.
+    const length = Math.hypot(cos / edge.x, sin / edge.y);
+    const n = {
+      x: (away * cos) / edge.x / length,
+      y: (away * sin) / edge.y / length,
+    };
+    const reach = TAG.x * Math.abs(n.x) + TAG.y * Math.abs(n.y);
+    const point = { x: CX + edge.x * cos, y: CY + edge.y * sin };
+    const center = (scale: number) => ({
+      x: point.x + n.x * (TAG_GAP + reach * scale),
+      y: point.y + n.y * (TAG_GAP + reach * scale),
+    });
+    // The larger tag of a phone must fit in the picture too.
+    const large = center(TAG_PHONE);
+    const fits =
+      large.x - TAG.x * TAG_PHONE >= 0 &&
+      large.x + TAG.x * TAG_PHONE <= W &&
+      large.y - TAG.y * TAG_PHONE >= 0 &&
+      large.y + TAG.y * TAG_PHONE <= H;
+    return {
+      ...center(1),
+      fits,
+      origin: `${(50 - 50 * n.x).toFixed(0)}% ${(50 - 50 * n.y).toFixed(0)}%`,
+    };
+  };
+  const outside = place(outer, 1);
+  return outside.fits ? outside : place(inner, -1);
 }
 
 function Field({ kind }: { kind: VenueMap["field"] }) {
@@ -233,13 +278,15 @@ export function StadiumMap({
                   : "fill-accent group-hover/section:fill-accent-hover",
               )}
             />
-            {/* On a phone the map is drawn at half size, so the tag is drawn larger to stay readable. */}
+            {/* On a phone the map is drawn at half size, so the tag is drawn larger to stay readable.
+                It grows from the side that faces its section, so it never grows over it. */}
             <g
               aria-hidden="true"
+              style={{ "--tag-origin": item.tag.origin } as React.CSSProperties}
               className={
                 plain
                   ? "hidden"
-                  : "origin-center transform-fill max-sm:scale-150"
+                  : "origin-(--tag-origin) transform-fill max-sm:scale-150"
               }
             >
               <rect

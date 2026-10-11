@@ -22,8 +22,9 @@ const ACCOUNTS: Record<
       { href: "/tickets", label: "Tickets" },
     ],
   },
+  // A club is the organizer of its own tickets, so it is called by what it is.
   team: {
-    role: "Organizer",
+    role: "Club",
     links: [{ href: "/organizer/nba", label: "Club desk", wide: true }],
   },
   house: {
@@ -45,21 +46,15 @@ async function WalletSlot() {
 }
 
 function Bar({
-  side,
   below,
   children,
 }: {
-  side?: "buyer" | "organizer";
   /** A second row, for what the top row has no room for on a narrow screen. */
   below?: React.ReactNode;
   children?: React.ReactNode;
 }) {
   return (
-    // data-side is what app/sides.css tints the whole page by.
-    <header
-      data-side={side}
-      className="sticky top-0 z-10 border-b border-line bg-page"
-    >
+    <header className="sticky top-0 z-10 border-b border-line bg-page">
       <div className="mx-auto flex h-14 w-full max-w-5xl items-center gap-2 px-4 sm:px-6">
         <Link
           href="/"
@@ -115,10 +110,7 @@ async function Account() {
   );
 
   return (
-    <Bar
-      side={session.kind === "buyer" ? "buyer" : "organizer"}
-      below={account}
-    >
+    <Bar below={account}>
       <nav aria-label="Main" className="flex items-center gap-1">
         {links.map((link) => (
           <Button

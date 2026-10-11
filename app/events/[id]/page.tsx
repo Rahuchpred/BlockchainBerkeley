@@ -126,10 +126,10 @@ async function EventPageContent({
           {unreleased
             ? " No club has released tickets yet."
             : from === null
-            ? own
-              ? `${own.decided.replace(/^t/, "T")}, so that team's tickets are now real seats.`
-              : "The finalists are decided, so the tickets for them are now real seats."
-            : ` Tickets start at ${formatAmount(from)}.`}
+              ? own
+                ? `${own.decided.replace(/^t/, "T")}, so that team's tickets are now real seats.`
+                : "The finalists are decided, so the tickets for them are now real seats."
+              : ` Tickets start at ${formatAmount(from)}.`}
         </p>
         <div>
           <Button

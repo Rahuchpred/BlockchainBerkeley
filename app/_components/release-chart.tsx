@@ -159,7 +159,9 @@ export function ReleaseChart({
                         <SeatButton
                           key={id}
                           label={`Row ${row}, seat ${seatIndex + 1}`}
-                          state={done.has(id) ? "released" : on ? "picked" : "free"}
+                          state={
+                            done.has(id) ? "released" : on ? "picked" : "free"
+                          }
                           disabled={pending}
                           onClick={() => toggle([id])}
                         />

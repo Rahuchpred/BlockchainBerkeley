@@ -35,8 +35,8 @@ async function Events() {
           event.ringPrices && event.seats.length === 0
             ? "No tickets released yet"
             : event.sides[0]?.condition
-          ? conditionOf(event.sides[0]).decided.replace(/^t/, "T")
-          : "Finalists decided",
+              ? conditionOf(event.sides[0]).decided.replace(/^t/, "T")
+              : "Finalists decided",
       };
     }),
   );
