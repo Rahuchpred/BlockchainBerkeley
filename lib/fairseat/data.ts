@@ -166,6 +166,39 @@ export const getSeat = (event: FairEvent, seatId: string) =>
 export const getSide = (event: FairEvent, sideId: string) =>
   event.sides.find((side) => side.id === sideId);
 
+/**
+ * The seats that can be bought together with one: the unbroken run of free seats around it in its
+ * row, lowest number first. A seat that is not free, or a gap in the numbers, ends the run.
+ */
+export function seatsBeside(
+  event: FairEvent,
+  seat: Seat,
+  free: (seat: Seat) => boolean,
+) {
+  const row = event.seats
+    .filter(
+      (item) =>
+        item.side === seat.side &&
+        item.section === seat.section &&
+        item.row === seat.row,
+    )
+    .sort((a, b) => Number(a.seat) - Number(b.seat));
+  const next = (a: Seat, b: Seat) =>
+    Number(b.seat) === Number(a.seat) + 1 && free(a) && free(b);
+  let from = row.findIndex((item) => item.id === seat.id);
+  let to = from;
+  while (from > 0 && next(row[from - 1], row[from])) from -= 1;
+  while (to < row.length - 1 && next(row[to], row[to + 1])) to += 1;
+  return row.slice(from, to + 1);
+}
+
+/** The seats a group of this size takes from a run: the chosen one, the ones after it, then the ones before. */
+export function groupOf(run: Seat[], seat: Seat, size: number) {
+  const at = run.findIndex((item) => item.id === seat.id);
+  const from = Math.max(0, Math.min(at, run.length - size));
+  return run.slice(from, from + size);
+}
+
 /** A team's ticket costs the seat's full price times the team's share of it. */
 export const priceFor = (seat: Seat, share: number) =>
   Math.round(seat.faceValue * share * 100) / 100;

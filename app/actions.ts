@@ -4,10 +4,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
   MARKETS,
+  type FairEvent,
+  type Seat,
   feeFor,
   getSeat,
   getSide,
   priceFor,
+  seatLabel,
   seats,
   slug,
 } from "@/lib/fairseat/data";
@@ -52,8 +55,9 @@ import {
 } from "@/lib/fairseat/store";
 import { readWallet, saveWallet } from "@/lib/fairseat/wallet";
 import {
+  GROUP_LIMIT,
   acceptOffer,
-  buyTicket,
+  buyTickets,
   cancelOffer,
   createFanWallet,
   listTickets,
@@ -88,18 +92,77 @@ export async function getTestWallet(): Promise<ActionResult> {
   }
 }
 
-/** Whether a wallet already holds as many tickets for a team in an event as one wallet may. */
-async function atLimit(address: string, eventId: string, team: string) {
+/** Whether taking more tickets for a team in an event would put a wallet over what one may hold. */
+async function atLimit(
+  address: string,
+  eventId: string,
+  team: string,
+  buying = 1,
+) {
   // Counted from the ledger, so tickets bought, bought from a fan and claimed all count.
   const held = await listTickets(address);
   return (
     held.filter((item) => item.eventId === eventId && item.team === team)
-      .length >= TICKET_LIMIT
+      .length +
+      buying >
+    TICKET_LIMIT
   );
 }
 
 const limitReached = (team: string) =>
   `You already hold ${TICKET_LIMIT} ${team} tickets for this event. That is the limit.`;
+
+/**
+ * Sells new tickets for one team to one wallet, a ticket for each seat, paid for together on the
+ * ledger, and records each sale. Returns the first ticket and the payment.
+ */
+async function sellNew(
+  wallet: { seed: string; address: string },
+  event: FairEvent,
+  group: Seat[],
+  outcome: { slug: string; share: number },
+) {
+  const team = outcome.slug;
+  const records = group.map((seat) => {
+    const price = priceFor(seat, outcome.share);
+    return {
+      eventId: event.id,
+      seatId: seat.id,
+      team,
+      paid: price + feeFor(price),
+    };
+  });
+  // If the money is never released, the fan can take it back a month after the event.
+  // The demo switch brings that forward to a few minutes from now, so a refund can be shown.
+  const quick = quickRefunds();
+  const refundAfter = quick
+    ? new Date(Date.now() + DEMO_REFUND_MINUTES * 60_000)
+    : refundDeadline(event.date);
+  const bought = await buyTickets(wallet.seed, records, refundAfter);
+  for (const [at, { nftId, hash, mintHash, escrow }] of bought.entries()) {
+    const { eventId, seatId, paid } = records[at];
+    saveEscrow(nftId, {
+      ...escrow,
+      amount: paid,
+      ...(quick && { refundAfter: refundAfter.toISOString() }),
+    });
+    recordHolder(nftId, wallet.address);
+    const ticket = { nftId, eventId, seatId, team };
+    logActivity(
+      { ...ticket, kind: "minted", hash: mintHash },
+      {
+        ...ticket,
+        kind: "bought",
+        amount: paid,
+        hash,
+        from: wallet.address,
+        to: organizerAddress(),
+      },
+    );
+    recordSale(ticketKey(eventId, seatId, team), nftId);
+  }
+  return { nftId: bought[0].nftId, hash: bought[0].hash };
+}
 
 /** Buys one team's ticket for a seat at the live price, on the ledger. */
 export async function buyTeamTicket(
@@ -152,42 +215,10 @@ export async function buyTeamTicket(
         to: offer.from,
       });
     } else {
-      const price = priceFor(seat, outcome.share);
       const wallet = await ensureWallet();
       if (await atLimit(wallet.address, eventId, team))
         return { error: limitReached(outcome.team) };
-      const paid = price + feeFor(price);
-      // If the money is never released, the fan can take it back a month after the event.
-      // The demo switch brings that forward to a few minutes from now, so a refund can be shown.
-      const quick = quickRefunds();
-      const refundAfter = quick
-        ? new Date(Date.now() + DEMO_REFUND_MINUTES * 60_000)
-        : refundDeadline(event.date);
-      const bought = await buyTicket(
-        wallet.seed,
-        { eventId, seatId, team, paid },
-        refundAfter,
-      );
-      ({ nftId, hash } = bought);
-      saveEscrow(nftId, {
-        ...bought.escrow,
-        amount: paid,
-        ...(quick && { refundAfter: refundAfter.toISOString() }),
-      });
-      recordHolder(nftId, wallet.address);
-      const ticket = { nftId, eventId, seatId, team };
-      logActivity(
-        { ...ticket, kind: "minted", hash: bought.mintHash },
-        {
-          ...ticket,
-          kind: "bought",
-          amount: paid,
-          hash,
-          from: wallet.address,
-          to: organizerAddress(),
-        },
-      );
-      recordSale(key, nftId);
+      ({ nftId, hash } = await sellNew(wallet, event, [seat], outcome));
     }
   } catch (error) {
     return { error: message(error) };
@@ -195,6 +226,70 @@ export async function buyTeamTicket(
   // The header now outlives the page, so ask for it again to show the new balance.
   revalidatePath("/", "layout");
   redirect(`/tickets/${nftId}?bought=${hash}`);
+}
+
+/**
+ * Buys one team's tickets for seats next to each other, at the live price, in one payment on the
+ * ledger: the fan gets every ticket or none. One seat is an ordinary purchase.
+ */
+export async function buyTeamTickets(
+  eventId: string,
+  seatIds: string[],
+  team: string,
+): Promise<ActionResult> {
+  if (!Array.isArray(seatIds) || seatIds.length < 1)
+    return { error: "That seat does not exist" };
+  if (seatIds.length === 1) return buyTeamTicket(eventId, seatIds[0], team);
+  try {
+    if (seatIds.length > GROUP_LIMIT)
+      return { error: `You can buy up to ${GROUP_LIMIT} seats together` };
+    const event = findEvent(eventId);
+    const group = seatIds
+      .map((seatId) => event && getSeat(event, seatId))
+      .filter((seat) => seat !== undefined && seat !== null)
+      .sort((a, b) => Number(a.seat) - Number(b.seat));
+    const config = event && group[0] && getSide(event, group[0].side);
+    if (
+      !event ||
+      !config ||
+      group.length !== seatIds.length ||
+      new Set(seatIds).size !== seatIds.length
+    )
+      return { error: "That seat does not exist" };
+    // Together means the same side, section and row, with no seat skipped.
+    const together = group.every(
+      (seat, at) =>
+        seat.side === group[0].side &&
+        seat.section === group[0].section &&
+        seat.row === group[0].row &&
+        Number(seat.seat) === Number(group[0].seat) + at,
+    );
+    if (!together) return { error: "Those seats are not next to each other" };
+
+    // The price is worked out here from the live market, never taken from the browser.
+    const side = await loadSide(config);
+    const outcome = side.onSale.find((item) => item.slug === team);
+    if (!outcome) return { error: "That ticket is no longer on sale" };
+
+    // A ticket that was sold once is never part of a group, even while its holder has it listed.
+    const taken = group.find((seat) =>
+      soldTicket(ticketKey(eventId, seat.id, team)),
+    );
+    if (taken)
+      return {
+        error: `The ${outcome.team} ticket for ${seatLabel(taken).toLowerCase()} has already been sold`,
+      };
+    const wallet = await ensureWallet();
+    if (await atLimit(wallet.address, eventId, team, group.length))
+      return {
+        error: `One wallet can hold up to ${TICKET_LIMIT} ${outcome.team} tickets for this event. These ${group.length} would take you over that.`,
+      };
+    await sellNew(wallet, event, group, outcome);
+  } catch (error) {
+    return { error: message(error) };
+  }
+  revalidatePath("/", "layout");
+  redirect("/tickets");
 }
 
 /** The caller's wallet and the ticket in it, or the reason there is none. */

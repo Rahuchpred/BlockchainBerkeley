@@ -2,18 +2,19 @@
 
 import { useState, useTransition } from "react";
 import { Button } from "@/components/lime/ui/button";
-import { buyTeamTicket } from "../actions";
+import { buyTeamTickets } from "../actions";
 
-// Pays for a ticket on the ledger. The button stays busy until the ledger has confirmed the swap.
+// Pays for a ticket on the ledger, or for a few seats together in one payment. The button stays
+// busy until the ledger has confirmed the swap.
 export function PayButton({
   eventId,
-  seatId,
+  seatIds,
   team,
   label,
   hasWallet,
 }: {
   eventId: string;
-  seatId: string;
+  seatIds: string[];
   team: string;
   label: string;
   hasWallet: boolean;
@@ -30,7 +31,7 @@ export function PayButton({
         onClick={() =>
           start(async () => {
             setError(null);
-            const result = await buyTeamTicket(eventId, seatId, team);
+            const result = await buyTeamTickets(eventId, seatIds, team);
             if (result?.error) setError(result.error);
           })
         }
@@ -40,7 +41,7 @@ export function PayButton({
       {pending && (
         <p className="text-sm leading-normal text-fg-2">
           {hasWallet
-            ? "Paying on the XRP Ledger. This takes about 15 seconds."
+            ? `Paying on the XRP Ledger. This takes about ${seatIds.length > 1 ? "half a minute" : "15 seconds"}.`
             : "Setting up your test wallet with $5,000 in test dollars, then paying. This takes about a minute."}
         </p>
       )}
