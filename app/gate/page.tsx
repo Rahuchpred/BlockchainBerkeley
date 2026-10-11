@@ -130,7 +130,7 @@ function Result({ verdict }: { verdict: Verdict }) {
             <CardDescription>
               {view.event.title}, {formatDate(view.event.date)}
             </CardDescription>
-            <CardDescription className="font-mono">
+            <CardDescription className="tabular-nums">
               {seatLabel(view.seat)}
             </CardDescription>
           </div>

@@ -3,6 +3,7 @@ import { conditionOf, formatDate, placeOf } from "@/lib/fairseat/data";
 import { allEvents } from "@/lib/fairseat/events";
 import { fromPrice, loadSides, loadWatched } from "@/lib/fairseat/live";
 import { EventBrowser } from "../_components/event-browser";
+import { LiveRefresh } from "../_components/live";
 import { PageSkeleton } from "../_components/page-skeleton";
 import { WatchList } from "../_components/watch-list";
 
@@ -54,6 +55,7 @@ async function Events() {
 export default function EventsPage() {
   return (
     <>
+      <LiveRefresh />
       <Suspense fallback={<PageSkeleton />}>
         <Events />
       </Suspense>

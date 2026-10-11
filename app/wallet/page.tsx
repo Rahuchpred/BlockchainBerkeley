@@ -34,6 +34,7 @@ import {
   getBalance,
   txUrl,
 } from "@/lib/fairseat/xrpl";
+import { LiveRefresh } from "../_components/live";
 import { PageSkeleton } from "../_components/page-skeleton";
 import { RefundButton } from "../_components/refund-button";
 import { Stat } from "../_components/stat";
@@ -125,22 +126,21 @@ async function WalletContent() {
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 pt-4 pb-8 sm:px-6 sm:pt-8">
       <header className="flex flex-col gap-2">
         <h1 className="title-page">Wallet</h1>
-        <p className="font-mono text-sm text-fg-2">
-          {shortAddress(wallet.address)}, on the XRP Ledger testnet
+        <p className="text-sm text-fg-2">
+          <span className="font-mono">{shortAddress(wallet.address)}</span>, on
+          the XRP Ledger testnet
         </p>
       </header>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Stat
           label="Available to spend"
-          value={
-            Number.isFinite(balance) ? formatAmount(balance) : "Unavailable"
-          }
+          value={Number.isFinite(balance) ? balance : "Unavailable"}
           note="Test dollars in your wallet"
         />
         <Stat
           label="Locked in escrow"
-          value={formatAmount(locked)}
+          value={locked}
           note="Released to the organizer once each result is decided"
         />
       </div>
@@ -190,7 +190,7 @@ async function WalletContent() {
                   <TableCell className="whitespace-nowrap text-fg-2">
                     {payment.event}
                   </TableCell>
-                  <TableCell className="text-end font-mono tabular-nums">
+                  <TableCell className="text-end tabular-nums">
                     {formatAmount(payment.amount)}
                   </TableCell>
                   <TableCell>
@@ -245,7 +245,7 @@ async function WalletContent() {
                     <TableCell className="whitespace-nowrap text-fg-2">
                       {seat ? seatLabel(seat) : step.seatId}
                     </TableCell>
-                    <TableCell className="text-end font-mono tabular-nums">
+                    <TableCell className="text-end tabular-nums">
                       {change === 0
                         ? ""
                         : formatAmount(change, { signed: true })}
@@ -278,8 +278,11 @@ async function WalletContent() {
 
 export default function WalletPage() {
   return (
-    <Suspense fallback={<PageSkeleton />}>
-      <WalletContent />
-    </Suspense>
+    <>
+      <LiveRefresh every={30_000} />
+      <Suspense fallback={<PageSkeleton />}>
+        <WalletContent />
+      </Suspense>
+    </>
   );
 }

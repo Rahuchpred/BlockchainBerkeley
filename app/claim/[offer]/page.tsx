@@ -44,7 +44,7 @@ async function ClaimPageContent({
             <CardDescription>
               {event.title}, {formatDate(event.date)}
             </CardDescription>
-            <CardDescription className="font-mono">
+            <CardDescription className="tabular-nums">
               {seatLabel(seat)}
             </CardDescription>
           </div>

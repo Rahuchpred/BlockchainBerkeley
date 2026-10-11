@@ -128,3 +128,9 @@
     @apply font-sans;
   }
 }
+
+/* Inter's alternate 1 and its open 4, 6 and 9, for every number in the app. This is the app's own
+   addition, kept out of Lime's base so installing a Lime component does not undo it. */
+.lime {
+  font-feature-settings: "calt", "cv01", "cv02", "cv03", "cv04";
+}

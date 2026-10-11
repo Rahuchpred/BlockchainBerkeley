@@ -34,7 +34,9 @@ const account = (label: string, address: string | null): Fact[] =>
   address ? [{ label, value: <AccountLink address={address} /> }] : [];
 
 const mono = (label: string, id: string | null): Fact[] =>
-  id ? [{ label, value: <span className="font-mono">{shortId(id)}</span> }] : [];
+  id
+    ? [{ label, value: <span className="font-mono">{shortId(id)}</span> }]
+    : [];
 
 /** A ticket's id, opening the gate check that asks the ledger about it. */
 const ticket = (id: string | null): Fact[] =>

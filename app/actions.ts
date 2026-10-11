@@ -21,6 +21,7 @@ import {
   type SecondOpinion,
 } from "@/lib/fairseat/context";
 import { loadSide, viewTicket } from "@/lib/fairseat/live";
+import { readTeam, saveTeam, teamName } from "@/lib/fairseat/team";
 import {
   DEMO_REFUND_MINUTES,
   RESALE_CAP,
@@ -35,6 +36,7 @@ import {
   clearOffer,
   escrowFor,
   findOffer,
+  forgetRelease,
   forgetTicket,
   holderOf,
   ledgerSettlement,
@@ -43,9 +45,12 @@ import {
   quickRefunds,
   recordHolder,
   recordPaid,
+  recordReleases,
   recordSale,
   recordSettled,
   recordSettlement,
+  releasedTicket,
+  releasedTickets,
   saveEscrow,
   saveEvent,
   saveOffer,
@@ -60,6 +65,7 @@ import {
   GROUP_LIMIT,
   acceptOffer,
   burnTicket,
+  buyReleasedTicket,
   buyTickets,
   cancelOffer,
   createFanWallet,
@@ -67,8 +73,13 @@ import {
   offerTicket,
   organizerAddress,
   refundEscrow,
+  releaseTickets,
+  setUpTeamOrganizer,
   settleTickets,
+  teamOrganizerAddress,
   verifyOrganizer,
+  type Settled,
+  type Settlement,
 } from "@/lib/fairseat/xrpl";
 import { allEvents } from "@/lib/fairseat/events";
 import { formatAmount } from "@/components/lime/ui/amount";
@@ -167,6 +178,54 @@ async function sellNew(
   return { nftId: bought[0].nftId, hash: bought[0].hash };
 }
 
+/**
+ * Sells a ticket its club has released to one wallet, paid into that club's own wallet on the
+ * ledger, and records the sale. Returns the ticket and the payment.
+ */
+async function sellReleased(
+  wallet: { seed: string; address: string },
+  event: FairEvent,
+  seat: Seat,
+  outcome: { slug: string; share: number },
+  nftId: string,
+) {
+  const team = outcome.slug;
+  const price = priceFor(seat, outcome.share);
+  const paid = price + feeFor(price);
+  const quick = quickRefunds();
+  const refundAfter = quick
+    ? new Date(Date.now() + DEMO_REFUND_MINUTES * 60_000)
+    : refundDeadline(event.date);
+  const { hash, escrow } = await buyReleasedTicket(
+    wallet.seed,
+    team,
+    nftId,
+    paid,
+    refundAfter,
+  );
+  saveEscrow(nftId, {
+    ...escrow,
+    amount: paid,
+    ...(quick && { refundAfter: refundAfter.toISOString() }),
+  });
+  recordHolder(nftId, wallet.address);
+  // A released ticket was minted before its price was known, so what was paid is kept here.
+  recordPaid(nftId, paid);
+  logActivity({
+    nftId,
+    eventId: event.id,
+    seatId: seat.id,
+    team,
+    kind: "bought",
+    amount: paid,
+    hash,
+    from: wallet.address,
+    to: teamOrganizerAddress(team),
+  });
+  recordSale(ticketKey(event.id, seat.id, team), nftId);
+  return { nftId, hash };
+}
+
 /** Buys one team's ticket for a seat at the live price, on the ledger. */
 export async function buyTeamTicket(
   eventId: string,
@@ -221,7 +280,19 @@ export async function buyTeamTicket(
       const wallet = await ensureWallet();
       if (await atLimit(wallet.address, eventId, team))
         return { error: limitReached(outcome.team) };
-      ({ nftId, hash } = await sellNew(wallet, event, [seat], outcome));
+      if (event.teamWallets) {
+        // Where clubs sell their own tickets, one is on sale only once its club has released it.
+        const released = releasedTicket(key);
+        if (!released)
+          return { error: `${outcome.team} have not released this ticket yet` };
+        ({ nftId, hash } = await sellReleased(
+          wallet,
+          event,
+          seat,
+          outcome,
+          released,
+        ));
+      } else ({ nftId, hash } = await sellNew(wallet, event, [seat], outcome));
     }
   } catch (error) {
     return { error: message(error) };
@@ -229,6 +300,64 @@ export async function buyTeamTicket(
   // The header now outlives the page, so ask for it again to show the new balance.
   revalidatePath("/", "layout");
   redirect(`/tickets/${nftId}?bought=${hash}`);
+}
+
+/** Picks the team this browser organizes for. */
+export async function chooseTeam(team: string): Promise<void> {
+  if (!teamName(team)) return;
+  await saveTeam(team);
+  revalidatePath("/", "layout");
+}
+
+/**
+ * Releases the organizer's team's tickets for every seat it has not yet released in one section.
+ * They are minted on the ledger from the team's own organizer wallet, which is set up on first use.
+ */
+export async function releaseSection(
+  eventId: string,
+  section: string,
+): Promise<ActionResult> {
+  try {
+    const team = await readTeam();
+    const event = findEvent(eventId);
+    if (!event?.teamWallets)
+      return { error: "This event's tickets are not released by its teams" };
+    // A team has tickets only for the seats on its own side.
+    const sides = await Promise.all(event.sides.map(loadSide));
+    const side = sides.find((item) =>
+      item.outcomes.some((outcome) => outcome.slug === team),
+    );
+    if (!side) return { error: "That team is not in this event" };
+    if (side.settled) return { error: "The finalist is already decided" };
+    const records = event.seats
+      .filter((seat) => seat.side === side.id && seat.section === section)
+      .filter((seat) => !releasedTicket(ticketKey(eventId, seat.id, team)))
+      .map((seat) => ({ eventId, seatId: seat.id, team, paid: 0 }));
+    if (records.length === 0)
+      return { error: "Every ticket in this section is already released" };
+
+    await setUpTeamOrganizer(team);
+    const released = await releaseTickets(team, records);
+    recordReleases(
+      released.map(({ record, nftId }) => ({
+        key: ticketKey(eventId, record.seatId, team),
+        nftId,
+      })),
+    );
+    logActivity(
+      ...released.map(({ record, nftId, hash }) => ({
+        kind: "minted" as const,
+        nftId,
+        eventId,
+        seatId: record.seatId,
+        team,
+        hash,
+      })),
+    );
+  } catch (error) {
+    return { error: message(error) };
+  }
+  revalidatePath("/", "layout");
 }
 
 /**
@@ -259,6 +388,9 @@ export async function buyTeamTickets(
       new Set(seatIds).size !== seatIds.length
     )
       return { error: "That seat does not exist" };
+    // A club's released tickets are each offered by the club, so they are paid for one at a time.
+    if (event.teamWallets)
+      return { error: "Tickets for this event are bought one seat at a time" };
     // Together means the same side, section and row, with no seat skipped.
     const together = group.every(
       (seat, at) =>
@@ -480,7 +612,11 @@ export async function takeRefund(
       hash,
       to: wallet.address,
     });
-    const burn = await burnTicket(nftId, wallet.address).catch(() => null);
+    const burn = await burnTicket(
+      nftId,
+      wallet.address,
+      event.teamWallets ? ticket.team : undefined,
+    ).catch(() => null);
     if (burn) {
       logActivity({
         ...ticket,
@@ -489,8 +625,10 @@ export async function takeRefund(
         hash: burn.hash,
         from: wallet.address,
       });
-      // The sale is forgotten, so this team's ticket for the seat can be bought again.
+      // The sale is forgotten, so this team's ticket for the seat can be bought again. Where
+      // clubs sell their own, the club has to release a new one first.
       forgetTicket(nftId);
+      forgetRelease(nftId);
     } else unburned = true;
   } catch (error) {
     return { error: message(error) };
@@ -623,28 +761,53 @@ export async function settleOnLedger(
     const side = config && (await loadSide(config));
     if (!side?.settled) return { error: "The finalist is not decided yet" };
     const winner = slug(side.settled);
-
-    // Every ticket sold for a seat on this side, in any event priced by this market.
-    const tickets = soldTickets().flatMap((ticket) => {
+    const marketOf = (ticket: { eventId: string; seatId: string }) => {
       const seat = findEvent(ticket.eventId)?.seats.find(
         (item) => item.id === ticket.seatId,
       );
-      const market = findEvent(ticket.eventId)?.sides.find(
+      return findEvent(ticket.eventId)?.sides.find(
         (item) => item.id === seat?.side,
       )?.market;
-      if (market !== ticker) return [];
-      const escrow = escrowFor(ticket.nftId);
-      return [
-        {
-          nftId: ticket.nftId,
-          about: ticket,
-          escrow,
-          burnFrom: ticket.team === winner ? null : holderOf(ticket.nftId),
-        },
-      ];
-    });
+    };
+
+    // Every ticket sold for a seat on this side, in any event priced by this market.
+    const sold = soldTickets().filter((ticket) => marketOf(ticket) === ticker);
+    const tickets: (Omit<Settlement, "escrow"> & {
+      about: (typeof sold)[number];
+      escrow: ReturnType<typeof escrowFor>;
+    })[] = sold.map((ticket) => ({
+      nftId: ticket.nftId,
+      about: ticket,
+      escrow: escrowFor(ticket.nftId),
+      burnFrom: ticket.team === winner ? null : holderOf(ticket.nftId),
+    }));
+    // A ticket a club released that nobody bought is still in its own account, and expires too.
+    const unsold = releasedTickets()
+      .filter((ticket) => marketOf(ticket) === ticker && ticket.team !== winner)
+      .filter((ticket) => !sold.some((item) => item.nftId === ticket.nftId))
+      .map((ticket) => ({
+        nftId: ticket.nftId,
+        about: ticket,
+        escrow: null,
+        burnFrom: teamOrganizerAddress(ticket.team),
+      }));
+    tickets.push(...unsold);
+
     // What happened is read back from the ledger for each ticket, and only that is recorded.
-    const { hashes, tickets: outcomes } = await settleTickets(tickets);
+    // Tickets a club released are settled by that club's own wallet, one club at a time.
+    const hashes: string[] = [];
+    const outcomes: Settled[] = [];
+    const teams = event?.teamWallets
+      ? [...new Set(tickets.map((ticket) => ticket.about.team))]
+      : [undefined];
+    for (const team of teams) {
+      const done = await settleTickets(
+        team ? tickets.filter((ticket) => ticket.about.team === team) : tickets,
+        team,
+      );
+      hashes.push(...done.hashes);
+      outcomes.push(...done.tickets);
+    }
     const outcome = new Map(outcomes.map((item) => [item.nftId, item]));
     const released = tickets.filter(
       (ticket) => outcome.get(ticket.nftId)?.release === "done",
@@ -668,7 +831,9 @@ export async function settleOnLedger(
         amount: ticket.escrow?.amount,
         hash: outcome.get(ticket.nftId)?.releaseHash,
         from: ticket.escrow?.owner,
-        to: organizerAddress(),
+        to: event?.teamWallets
+          ? teamOrganizerAddress(ticket.about.team)
+          : organizerAddress(),
       })),
       ...burned.map((ticket) => ({
         ...ticket.about,

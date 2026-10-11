@@ -5,7 +5,7 @@ description: Lime design system rules for this project's UI. Use when building o
 
 # Lime
 
-Project override (Fairseat): the accent is blue (#356ed8), not acid lime, and the fonts are Lime's own (Hanken Grotesk). Text on the accent is white in the light theme (--on-accent). Wherever these rules say lime, read the blue accent. The "No blue" line in the reject list does not apply to the accent. After installing a Lime component, run python3 scripts/retune-lime.py.
+Project override (Fairseat): the accent is blue (#356ed8), not acid lime, and the font is Inter, for words and numbers alike. Text on the accent is white in the light theme (--on-accent). Wherever these rules say lime, read the blue accent. The "No blue" line in the reject list does not apply to the accent. After installing a Lime component, run python3 scripts/retune-lime.py.
 
 Lime is a white page, warm-grey surfaces and near-black text with one acid lime on the main action, for consumer apps. Build with these components before writing markup.
 

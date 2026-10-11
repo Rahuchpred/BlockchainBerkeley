@@ -9,6 +9,7 @@ import {
   hashes,
   isValidClassicAddress,
   type SubmittableTransaction,
+  type Transaction,
   type TransactionMetadata,
 } from "xrpl";
 
@@ -16,6 +17,8 @@ import {
 //
 // - The issuer issues the test dollars fans pay with.
 // - The organizer mints the tickets, and is who the fans' money ends up with.
+// - Where an event's teams sell their own tickets, each team has an organizer account of its own.
+//   It mints that team's tickets when it releases them, and is who the money for them ends up with.
 // - A ticket is an NFT whose URI names the event, the seat and the team.
 // - Buying is one Batch: the fan's dollars go into an escrow and the ticket moves to the fan, or
 //   neither happens. The escrow is released to the organizer once the finalists are decided.
@@ -98,6 +101,27 @@ function organizer() {
 
 export const organizerAddress = () => organizer().address;
 
+// One organizer account per team, for events whose teams sell their own tickets. Each is its own
+// account on the ledger with its own keys. The keys are worked out from the organizer seed and the
+// team, so there are no further seeds to store.
+const teamOrganizers = new Map<string, Wallet>();
+
+function teamOrganizer(team: string) {
+  let wallet = teamOrganizers.get(team);
+  if (!wallet) {
+    const entropy = createHash("sha512")
+      .update(`${organizer().seed}|team|${team}`)
+      .digest()
+      .subarray(0, 16);
+    wallet = Wallet.fromEntropy(entropy);
+    teamOrganizers.set(team, wallet);
+  }
+  return wallet;
+}
+
+export const teamOrganizerAddress = (team: string) =>
+  teamOrganizer(team).address;
+
 /**
  * The lock on a ticket's escrow and the key that opens it. Only Fairseat can work out the key, so
  * the money moves when Fairseat says the finalists are decided and not before.
@@ -115,7 +139,12 @@ function escrowLock(nftId: string) {
 
 /** One part of a Batch: it carries no fee or signature of its own. */
 const inner = (tx: Record<string, unknown>) => ({
-  RawTransaction: { ...tx, Flags: INNER, Fee: "0", SigningPubKey: "" },
+  RawTransaction: {
+    ...tx,
+    Flags: (Number(tx.Flags) || 0) | INNER,
+    Fee: "0",
+    SigningPubKey: "",
+  },
 });
 
 /** Submits several transactions from one account so that all of them happen or none do. */
@@ -139,6 +168,31 @@ async function submitTogether(
     wallet,
   });
   assertOk(done.result.meta, what);
+  // The ledger accepts a Batch even when it refuses one of its parts, and then none of them happen.
+  // The parts are on the ledger only if all of them went through, so the first one is looked up.
+  const first = (
+    done.result.tx_json as {
+      RawTransactions?: { RawTransaction: Transaction }[];
+    }
+  ).RawTransactions?.[0];
+  if (first) {
+    const applied = await client
+      .request({
+        command: "tx",
+        transaction: hashes.hashSignedTx(first.RawTransaction),
+      })
+      .then(
+        () => true,
+        (error) => {
+          if (error?.data?.error === "txnNotFound") return false;
+          throw error;
+        },
+      );
+    if (!applied)
+      throw new Error(
+        `${what} failed on the ledger: one step was refused, so nothing happened`,
+      );
+  }
   return done.result;
 }
 
@@ -183,6 +237,71 @@ export function createFanWallet(): Promise<FanWallet> {
     );
     assertOk(gift.result.meta, "Sending test dollars");
     return { seed: wallet.seed!, address: wallet.address };
+  });
+}
+
+export type TeamOrganizer = {
+  address: string;
+  /** The account exists on the ledger and can be paid in test dollars. */
+  ready: boolean;
+  balance: number;
+};
+
+const notFound = (error: unknown) =>
+  (error as { data?: { error?: string } }).data?.error === "actNotFound";
+
+/** Where a team's organizer account stands on the ledger. */
+export function getTeamOrganizer(team: string): Promise<TeamOrganizer> {
+  return withClient(async (client) => {
+    const { address } = teamOrganizer(team);
+    try {
+      const lines = await client.request({
+        command: "account_lines",
+        account: address,
+        peer: issuer().address,
+      });
+      const line = lines.result.lines.find(
+        (item) => item.currency === CURRENCY,
+      );
+      return {
+        address,
+        ready: line !== undefined,
+        balance: line ? Number(line.balance) : 0,
+      };
+    } catch (error) {
+      if (notFound(error)) return { address, ready: false, balance: 0 };
+      throw error;
+    }
+  });
+}
+
+/**
+ * Makes a team's organizer account ready to sell: funded from the testnet faucet and trusting the
+ * issuer's dollars. Each step is skipped if it is already done.
+ */
+export async function setUpTeamOrganizer(team: string) {
+  if ((await getTeamOrganizer(team)).ready) return;
+  return withClient(async (client) => {
+    const wallet = teamOrganizer(team);
+    const exists = await client
+      .request({ command: "account_info", account: wallet.address })
+      .then(
+        () => true,
+        (error) => {
+          if (notFound(error)) return false;
+          throw error;
+        },
+      );
+    if (!exists) await client.fundWallet(wallet, { faucetHost: FAUCET });
+    const trust = await client.submitAndWait(
+      {
+        TransactionType: "TrustSet",
+        Account: wallet.address,
+        LimitAmount: dollars(100_000_000),
+      },
+      { wallet },
+    );
+    assertOk(trust.result.meta, "Trusting test dollars");
   });
 }
 
@@ -242,11 +361,15 @@ export function listTickets(address: string): Promise<HeldTicket[]> {
         marker,
       });
       for (const nft of page.result.account_nfts) {
-        // Tickets sold before the organizer account existed were minted by the issuer.
+        const record = decode(nft.URI);
+        // Tickets sold before the organizer account existed were minted by the issuer. A ticket
+        // a team released was minted by that team's own organizer.
         const ours =
-          nft.Issuer === organizer().address || nft.Issuer === issuer().address;
-        const record = ours ? decode(nft.URI) : null;
-        if (record) held.push({ ...record, nftId: nft.NFTokenID });
+          record !== null &&
+          (nft.Issuer === organizer().address ||
+            nft.Issuer === issuer().address ||
+            nft.Issuer === teamOrganizerAddress(record.team));
+        if (ours) held.push({ ...record, nftId: nft.NFTokenID });
       }
       marker = page.result.marker;
     } while (marker);
@@ -262,6 +385,41 @@ export type Purchase = {
   /** Where the fan's payment is held: an escrow is named by its owner and a sequence number. */
   escrow: { owner: string; sequence: number };
 };
+
+/** One Batch from the fan: the price is locked in an escrow for the seller, and the offered ticket is taken. */
+async function payAndTake(
+  client: Client,
+  fan: Wallet,
+  seller: string,
+  nftId: string,
+  offerId: string,
+  paid: number,
+  refundAfter: Date,
+) {
+  const done = await submitTogether(
+    client,
+    fan,
+    [
+      {
+        TransactionType: "EscrowCreate",
+        Account: fan.address,
+        Destination: seller,
+        Amount: dollars(paid),
+        Condition: escrowLock(nftId).condition,
+        CancelAfter: Math.floor(refundAfter.getTime() / 1000) - RIPPLE_EPOCH,
+      },
+      {
+        TransactionType: "NFTokenAcceptOffer",
+        Account: fan.address,
+        NFTokenSellOffer: offerId,
+      },
+    ],
+    "Paying for the ticket",
+  );
+  // The escrow is the first part of the Batch, so it takes the number after the Batch's own.
+  const sequence = (done.tx_json.Sequence ?? 0) + 1;
+  return { hash: done.hash, escrow: { owner: fan.address, sequence } };
+}
 
 /**
  * Sells a new ticket. The organizer mints it with an offer only this fan can take. Then, in one
@@ -432,6 +590,26 @@ export function buyTickets(
   });
 }
 
+export type Release = { record: TicketRecord; nftId: string; hash: string };
+
+/** The id and record of every item an account holds. */
+async function heldItems(client: Client, address: string) {
+  const held: { nftId: string; uri: string | undefined }[] = [];
+  let marker: unknown;
+  do {
+    const page = await client.request({
+      command: "account_nfts",
+      account: address,
+      limit: 400,
+      marker,
+    });
+    for (const nft of page.result.account_nfts)
+      held.push({ nftId: nft.NFTokenID, uri: nft.URI });
+    marker = page.result.marker;
+  } while (marker);
+  return held;
+}
+
 /** Whether an escrow is on the ledger now. One that was released or taken back is not. */
 async function escrowExists(
   client: Client,
@@ -475,6 +653,54 @@ async function nftsIn(client: Client, holder: string) {
 }
 
 /**
+ * Releases a team's tickets: its organizer mints each one into its own account, where it waits for
+ * a buyer. Up to eight are minted in one Batch. The price is not known yet, so the record carries 0.
+ */
+export function releaseTickets(
+  team: string,
+  records: TicketRecord[],
+): Promise<Release[]> {
+  return withClient(async (client) => {
+    const house = teamOrganizer(team);
+    const before = new Set(
+      (await heldItems(client, house.address)).map((item) => item.nftId),
+    );
+    const hashes = new Map<string, string>();
+    for (let at = 0; at < records.length; at += BATCH_LIMIT) {
+      const chunk = records.slice(at, at + BATCH_LIMIT);
+      const done = await submitTogether(
+        client,
+        house,
+        chunk.map((record) => ({
+          TransactionType: "NFTokenMint",
+          Account: house.address,
+          NFTokenTaxon: 0,
+          Flags: TRANSFERABLE | BURNABLE,
+          TransferFee: RESALE_CUT,
+          URI: encode(record),
+        })),
+        "Releasing the tickets",
+      );
+      for (const record of chunk) hashes.set(encode(record), done.hash);
+    }
+
+    // A Batch does not say which tickets it made, so the new ones are read back from the account.
+    const released = (await heldItems(client, house.address)).flatMap(
+      (item): Release[] => {
+        const record = records.find((entry) => encode(entry) === item.uri);
+        const hash = item.uri && hashes.get(item.uri);
+        return record && hash && !before.has(item.nftId)
+          ? [{ record, nftId: item.nftId, hash }]
+          : [];
+      },
+    );
+    if (released.length !== records.length)
+      throw new Error("The ledger did not return every released ticket");
+    return released;
+  });
+}
+
+/**
  * Gives a fan back a payment that was never released. The ledger allows it only to be undone once
  * the escrow's deadline has passed, and only while the escrow still exists.
  */
@@ -502,12 +728,73 @@ export function refundEscrow(
 }
 
 /**
- * Removes a ticket from whoever holds it. The organizer can do this because every ticket is minted
- * burnable. The holder's wallet is read back to confirm it is gone.
+ * Sells a ticket its team has released. The team's organizer offers it to this fan alone. Then, in
+ * one Batch, the fan locks the price in an escrow for that organizer and takes the ticket.
  */
-export function burnTicket(nftId: string, holder: string) {
+export function buyReleasedTicket(
+  fanSeed: string,
+  team: string,
+  nftId: string,
+  paid: number,
+  refundAfter: Date,
+): Promise<Omit<Purchase, "mintHash">> {
   return withClient(async (client) => {
-    const house = organizer();
+    const fan = Wallet.fromSeed(fanSeed);
+    const house = teamOrganizer(team);
+
+    const offer = await client.submitAndWait(
+      {
+        TransactionType: "NFTokenCreateOffer",
+        Account: house.address,
+        NFTokenID: nftId,
+        Amount: "0",
+        Destination: fan.address,
+        Flags: SELL_OFFER,
+      },
+      { wallet: house },
+    );
+    assertOk(offer.result.meta, "Offering the ticket");
+    const offerId = (
+      offer.result.meta as TransactionMetadata & { offer_id?: string }
+    ).offer_id;
+    if (!offerId) throw new Error("The ledger did not return an offer id");
+
+    try {
+      const done = await payAndTake(
+        client,
+        fan,
+        house.address,
+        nftId,
+        offerId,
+        paid,
+        refundAfter,
+      );
+      return { nftId, ...done };
+    } catch (error) {
+      // The fan did not pay, so the ticket goes back to waiting for any buyer.
+      await client
+        .submitAndWait(
+          {
+            TransactionType: "NFTokenCancelOffer",
+            Account: house.address,
+            NFTokenOffers: [offerId],
+          },
+          { wallet: house },
+        )
+        .catch(() => undefined);
+      throw error;
+    }
+  });
+}
+
+/**
+ * Removes a ticket from whoever holds it. The organizer can do this because every ticket is minted
+ * burnable. The holder's wallet is read back to confirm it is gone. A ticket a club released is
+ * burned by that club's own wallet, so name the club.
+ */
+export function burnTicket(nftId: string, holder: string, team?: string) {
+  return withClient(async (client) => {
+    const house = team ? teamOrganizer(team) : organizer();
     const burn = await client.submitAndWait(
       {
         TransactionType: "NFTokenBurn",
@@ -554,13 +841,15 @@ export type Settled = {
  * Settles tickets once the finalists are decided: releases each payment to the organizer and burns
  * the tickets for teams that missed out. A Batch is recorded as a success even when its parts were
  * turned away, so every escrow and ticket is read from the ledger before and after. Returns what
- * really happened to each ticket and the transactions that did it.
+ * really happened to each ticket and the transactions that did it. Tickets a club released are
+ * settled by that club's own wallet, so name the club.
  */
 export function settleTickets(
   tickets: Settlement[],
+  team?: string,
 ): Promise<{ hashes: string[]; tickets: Settled[] }> {
   return withClient(async (client) => {
-    const house = organizer();
+    const house = team ? teamOrganizer(team) : organizer();
     type Part = {
       kind: "release" | "burn";
       about: Settled;
@@ -613,7 +902,10 @@ export function settleTickets(
           tx: {
             TransactionType: "NFTokenBurn",
             Account: house.address,
-            Owner: ticket.burnFrom,
+            // A ticket nobody bought is still in the club's own account.
+            ...(ticket.burnFrom !== house.address && {
+              Owner: ticket.burnFrom,
+            }),
             NFTokenID: ticket.nftId,
           },
         });

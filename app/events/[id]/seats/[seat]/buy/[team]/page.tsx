@@ -20,7 +20,12 @@ import {
 import { findEvent } from "@/lib/fairseat/events";
 import { loadSide } from "@/lib/fairseat/live";
 import { TICKET_LIMIT } from "@/lib/fairseat/rules";
-import { offerFor, soldTicket, ticketKey } from "@/lib/fairseat/store";
+import {
+  offerFor,
+  releasedTicket,
+  soldTicket,
+  ticketKey,
+} from "@/lib/fairseat/store";
 import { readWallet } from "@/lib/fairseat/wallet";
 import { GROUP_LIMIT } from "@/lib/fairseat/xrpl";
 import { PageSkeleton } from "../../../../../../_components/page-skeleton";
@@ -39,9 +44,7 @@ function Row({
   return (
     <div className="flex justify-between gap-3">
       <dt className="text-fg-2">{label}</dt>
-      <dd className={mono ? "text-end font-mono tabular-nums" : "text-end"}>
-        {value}
-      </dd>
+      <dd className={mono ? "text-end tabular-nums" : "text-end"}>{value}</dd>
     </div>
   );
 }
@@ -62,7 +65,10 @@ async function ReviewPageContent({
   if (!outcome) notFound();
 
   // A ticket that was already sold can only be bought from its holder, at the price they listed.
-  const taken = soldTicket(ticketKey(event.id, seat.id, outcome.slug));
+  const key = ticketKey(event.id, seat.id, outcome.slug);
+  const taken = soldTicket(key);
+  // Where teams sell their own tickets, there is nothing to buy until the team has released it.
+  if (event.teamWallets && !taken && !releasedTicket(key)) notFound();
   const offer = taken ? offerFor(taken) : null;
   const resale = offer && offer.price > 0 ? offer.price : null;
   const price = resale ?? priceFor(seat, outcome.share);
@@ -71,14 +77,16 @@ async function ReviewPageContent({
   const back = `/events/${event.id}/seats/${seat.id}`;
 
   // Seats beside this one, in its row, can be paid for together while this team's ticket for each
-  // is unsold. A ticket that was sold once is bought on its own.
-  const run = taken
-    ? [seat]
-    : seatsBeside(
-        event,
-        seat,
-        (item) => !soldTicket(ticketKey(event.id, item.id, outcome.slug)),
-      );
+  // is unsold. A ticket that was sold once is bought on its own, and so is one a club released,
+  // since the club offers each of those to its buyer.
+  const run =
+    taken || event.teamWallets
+      ? [seat]
+      : seatsBeside(
+          event,
+          seat,
+          (item) => !soldTicket(ticketKey(event.id, item.id, outcome.slug)),
+        );
   const most = Math.min(run.length, GROUP_LIMIT);
   const count = Math.min(Math.max(Math.trunc(Number(asked)) || 1, 1), most);
   const group = groupOf(run, seat, count);
@@ -104,7 +112,7 @@ async function ReviewPageContent({
         </header>
         <Card variant="outline">
           <div className="flex flex-col items-center gap-1 text-center">
-            <p className="font-mono text-3xl font-semibold tracking-tight tabular-nums">
+            <p className="text-3xl font-semibold tracking-tight tabular-nums">
               {formatAmount(total)}
             </p>
             <p className="text-sm leading-normal text-fg-2">
@@ -162,9 +170,7 @@ async function ReviewPageContent({
                 ))}
                 <div className="flex justify-between gap-3 border-t border-line pt-2 font-medium">
                   <dt>Total</dt>
-                  <dd className="font-mono tabular-nums">
-                    {formatAmount(total)}
-                  </dd>
+                  <dd className="tabular-nums">{formatAmount(total)}</dd>
                 </div>
               </div>
             )}

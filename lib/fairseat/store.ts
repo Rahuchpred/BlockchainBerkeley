@@ -1,10 +1,15 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { FairEvent } from "./data";
 
 // The small amount of state Fairseat keeps beside the ledger. The ledger holds the tickets and the
 // offers themselves; these files only make them quick to look up without scanning every account.
-const DIR = join(process.cwd(), ".data");
+// On Vercel the project folder cannot be written to, so the files go in the temporary folder. That
+// folder lasts only as long as the running instance does: fine for a demo, not for keeping.
+const DIR = process.env.VERCEL
+  ? join(tmpdir(), "fairseat-data")
+  : join(process.cwd(), ".data");
 
 function read<T>(name: string, empty: T): T {
   const file = join(DIR, name);
@@ -34,6 +39,36 @@ export const soldTicket = (key: string) =>
 export function recordSale(key: string, nftId: string) {
   write("sold.json", { ...read<Sold>("sold.json", {}), [key]: nftId });
 }
+
+// Which tickets a team's organizer has released: minted into its account, on sale until one is sold.
+export const releasedTicket = (key: string) =>
+  read<Sold>("released.json", {})[key] ?? null;
+
+export function recordReleases(tickets: { key: string; nftId: string }[]) {
+  write("released.json", {
+    ...read<Sold>("released.json", {}),
+    ...Object.fromEntries(tickets.map((ticket) => [ticket.key, ticket.nftId])),
+  });
+}
+
+/** Forgets a released ticket that is gone from the ledger, so its club can release it again. */
+export function forgetRelease(nftId: string) {
+  write(
+    "released.json",
+    Object.fromEntries(
+      Object.entries(read<Sold>("released.json", {})).filter(
+        ([, id]) => id !== nftId,
+      ),
+    ),
+  );
+}
+
+/** Every ticket a team has released, sold or not, as its key and its id on the ledger. */
+export const releasedTickets = () =>
+  Object.entries(read<Sold>("released.json", {})).map(([key, nftId]) => {
+    const [eventId, seatId, team] = key.split("|");
+    return { eventId, seatId, team, nftId };
+  });
 
 /** An offer a holder has open on the ledger for one of their tickets. A price of 0 is a gift. */
 export type Offer = {

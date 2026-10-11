@@ -67,11 +67,11 @@ export type Seat = {
   faceValue: number;
 };
 
-export type Sport = "Football" | "Baseball" | "Soccer";
+export type Sport = "Football" | "Baseball" | "Soccer" | "NBA";
 
 /** The shape of a venue's seating bowl: rings of numbered sections around the field, inner ring first. */
 export type VenueMap = {
-  field: "football" | "baseball" | "soccer";
+  field: "football" | "baseball" | "soccer" | "basketball";
   rings: { first: number; count: number }[];
 };
 
@@ -90,6 +90,11 @@ export type FairEvent = {
   seats: Seat[];
   /** For an event an organizer listed: the site whose page its details were checked against. */
   checkedAgainst?: string;
+  /**
+   * Each team sells its own tickets: they are minted by, and paid to, that team's own organizer
+   * wallet, and a ticket is only on sale once its team has released it.
+   */
+  teamWallets?: boolean;
 };
 
 /** A ticket a fan holds. The id is the ticket's id on the ledger. */
@@ -172,6 +177,33 @@ export const EVENTS: FairEvent[] = [
     ],
     seats: [...seats("al", "24", 480), ...seats("nl", "41", 480)],
   },
+  {
+    id: "nba-finals-2027-game-1",
+    title: "NBA Finals, Game 1",
+    sport: "NBA",
+    date: "2027-06-03",
+    venue: "Chase Center",
+    city: "San Francisco, CA",
+    officialUrl: "https://www.nba.com",
+    map: {
+      field: "basketball",
+      rings: [
+        { first: 101, count: 30 },
+        { first: 201, count: 30 },
+      ],
+    },
+    sides: [
+      { id: "east", name: "Eastern Conference side", market: "NBAEAST27" },
+      { id: "west", name: "Western Conference side", market: "NBAWEST27" },
+    ],
+    seats: [
+      ...seats("east", "104", 900),
+      ...seats("west", "119", 900),
+      ...seats("east", "208", 420),
+      ...seats("west", "223", 420),
+    ],
+    teamWallets: true,
+  },
   // Gemini prices who wins the Champions League, not who reaches its final, so it cannot price a
   // seat at that final. The winner does play the Super Cup, at a venue UEFA fixed in advance.
   {
@@ -201,6 +233,60 @@ export const EVENTS: FairEvent[] = [
     seats: [...seats("ucl", "112", 900), ...seats("ucl", "418", 420)],
   },
 ];
+
+/** Gemini's one market for the whole league: which of the 30 teams wins the title. */
+export const NBA_MARKET = "NBAF-2627CHAMP";
+
+/**
+ * Gemini has no market for who wins each conference, so each one is cut out of the league market:
+ * the conference's 15 teams, with their title chances shared out between them. The names are
+ * Gemini's labels. See getMarket in lib/fairseat/gemini.ts.
+ */
+export const NBA_CONFERENCES: Record<
+  string,
+  { title: string; teams: string[] }
+> = {
+  NBAEAST27: {
+    title: "Eastern Conference Champion",
+    teams: [
+      "Atlanta",
+      "Boston",
+      "Brooklyn",
+      "Charlotte",
+      "Chicago",
+      "Cleveland",
+      "Detroit",
+      "Indiana",
+      "Miami",
+      "Milwaukee",
+      "New York",
+      "Orlando",
+      "Philadelphia",
+      "Toronto",
+      "Washington",
+    ],
+  },
+  NBAWEST27: {
+    title: "Western Conference Champion",
+    teams: [
+      "Dallas",
+      "Denver",
+      "Golden State",
+      "Houston",
+      "LA Clippers",
+      "LA Lakers",
+      "Memphis",
+      "Minnesota",
+      "New Orleans",
+      "Oklahoma City",
+      "Phoenix",
+      "Portland",
+      "Sacramento",
+      "San Antonio",
+      "Utah",
+    ],
+  },
+};
 
 export const slug = (team: string) =>
   team
@@ -319,11 +405,6 @@ export const WATCHING: { market: string; reason: string }[] = [
     market: "BASEBALL26",
     reason:
       "This prices who wins the series, not who plays in it. The league markets price the seats.",
-  },
-  {
-    market: "NBAF-2627CHAMP",
-    reason:
-      "The finals are played in the two finalists' own arenas, so no seat is known yet.",
   },
   {
     market: "NHLSTANLEYCUP27",

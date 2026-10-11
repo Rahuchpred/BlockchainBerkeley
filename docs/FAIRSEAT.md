@@ -90,8 +90,9 @@ price, so the organizer is paid in full either way.
 
 ## Design decisions
 
-- **Type:** Lime's own fonts. Hanken Grotesk for text, the system monospace for
-  prices, odds, tickers and seat codes.
+- **Type:** Inter for words and numbers, with its alternate 1 and open 4, 6 and 9.
+  Numbers that change roll and tint as they change. The system monospace is kept
+  for ledger addresses, transaction ids and seat codes.
 - **Design system:** Lime from design.how, installed through shadcn, with its
   accent retuned from acid lime to blue (`#356ed8`, the creator-ops brand
   blue). Installing a Lime component resets the theme, so run

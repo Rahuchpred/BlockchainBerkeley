@@ -103,7 +103,7 @@ export function TicketWallet({ tickets }: { tickets: WalletTicket[] }) {
                   <CardDescription>{ticket.event}</CardDescription>
                   <CardDescription>{ticket.date}</CardDescription>
                   <CardDescription>{ticket.place}</CardDescription>
-                  <CardDescription className="font-mono">
+                  <CardDescription className="tabular-nums">
                     {ticket.seat}
                   </CardDescription>
                 </div>

@@ -1,4 +1,5 @@
 import { cacheLife } from "next/cache";
+import { NBA_CONFERENCES, NBA_MARKET } from "./data";
 
 // Reads Gemini's public prediction market data. No key is needed for any of this.
 const API = "https://api.gemini.com";
@@ -64,15 +65,23 @@ export async function getMarket(ticker: string): Promise<Market> {
   "use cache";
   cacheLife("seconds");
 
-  const response = await fetch(`${API}/v1/prediction-markets/events/${ticker}`);
+  // An NBA conference is not a market of its own on Gemini: it is its teams' part of the league market.
+  const conference = NBA_CONFERENCES[ticker];
+  const source = conference ? NBA_MARKET : ticker;
+  const response = await fetch(`${API}/v1/prediction-markets/events/${source}`);
   if (!response.ok)
-    throw new Error(`Gemini market ${ticker} returned ${response.status}`);
+    throw new Error(`Gemini market ${source} returned ${response.status}`);
   const event = (await response.json()) as RawEvent;
+  const contracts = conference
+    ? event.contracts.filter((contract) =>
+        conference.teams.includes(contract.label),
+      )
+    : event.contracts;
 
-  const winner = event.contracts.find(
+  const winner = contracts.find(
     (contract) => contract.resolutionSide === "yes",
   );
-  const raw = event.contracts.map((contract) => ({
+  const raw = contracts.map((contract) => ({
     team: contract.label,
     symbol: contract.instrumentSymbol,
     image: contract.imageUrl ?? null,
@@ -89,8 +98,8 @@ export async function getMarket(ticker: string): Promise<Market> {
   const total = raw.reduce((sum, outcome) => sum + outcome.chance, 0);
 
   return {
-    ticker: event.ticker,
-    title: event.title,
+    ticker,
+    title: conference?.title ?? event.title,
     image: event.featuredImageUrl ?? event.imageUrl ?? null,
     settled: winner?.label ?? null,
     outcomes: raw
