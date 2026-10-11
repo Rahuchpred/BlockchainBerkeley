@@ -24,6 +24,8 @@ export type FinderSeat = {
   label: string;
   summary: string;
   faceValue: number;
+  /** The cheapest ticket for the seat that can be bought now, where that is not every team's. Null when none can. */
+  from?: number | null;
   href: string;
   row: string;
   seat: string;
@@ -130,7 +132,13 @@ export function SeatFinder({
                     href={seat.href}
                     title={seat.label}
                     description={seat.summary}
-                    trailing={formatAmount(seat.faceValue, { compact: true })}
+                    trailing={
+                      seat.from === undefined
+                        ? formatAmount(seat.faceValue, { compact: true })
+                        : seat.from === null
+                          ? "Sold"
+                          : `from ${formatAmount(seat.from, { compact: true })}`
+                    }
                   />
                 ))}
               </List>

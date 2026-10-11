@@ -11,7 +11,13 @@ import {
   type Ticket,
 } from "./data";
 import { getHistory, getMarket, type MarketOutcome } from "./gemini";
-import { stagedResult } from "./store";
+import {
+  offerFor,
+  releasedTicket,
+  soldTicket,
+  stagedResult,
+  ticketKey,
+} from "./store";
 
 /** How many teams get their own color. The rest share the neutral one. */
 export const TONES = 8;
@@ -113,13 +119,29 @@ export async function loadWatched(): Promise<WatchedMarket[]> {
   return watched.filter((market) => market !== null);
 }
 
+/**
+ * What each ticket for a seat that can be bought right now costs. Where clubs sell their own
+ * tickets, that is only the ones a club has released: at the live price while unsold, or at the
+ * holder's asking price while listed for resale. A team that has released nothing has no price.
+ */
+export function pricesOnSale(event: FairEvent, seat: Seat, side: LiveSide) {
+  if (!event.teamWallets)
+    return side.onSale.map((outcome) => priceFor(seat, outcome.share));
+  return side.onSale.flatMap((outcome) => {
+    const key = ticketKey(event.id, seat.id, outcome.slug);
+    if (!releasedTicket(key)) return [];
+    const sold = soldTicket(key);
+    if (!sold) return [priceFor(seat, outcome.share)];
+    const offer = offerFor(sold);
+    return offer && offer.price > 0 ? [offer.price] : [];
+  });
+}
+
 /** The cheapest ticket still on sale across an event's seats. */
 export function fromPrice(event: FairEvent, sides: LiveSide[]) {
   const prices = event.seats.flatMap((seat) => {
     const side = sides.find((item) => item.id === seat.side);
-    return side
-      ? side.onSale.map((outcome) => priceFor(seat, outcome.share))
-      : [];
+    return side ? pricesOnSale(event, seat, side) : [];
   });
   return prices.length ? Math.min(...prices) : null;
 }

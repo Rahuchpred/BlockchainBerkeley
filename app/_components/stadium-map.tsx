@@ -80,6 +80,7 @@ function tagFor(
     return {
       ...center(1),
       fits,
+      away: n,
       origin: `${(50 - 50 * n.x).toFixed(0)}% ${(50 - 50 * n.y).toFixed(0)}%`,
     };
   };
@@ -190,6 +191,29 @@ function Field({ kind }: { kind: VenueMap["field"] }) {
 
 // The seating bowl as numbered sections around the field. A section with tickets on sale is tinted and
 // carries its lowest price; pressing it picks the section.
+/**
+ * Moves a tag further out when it would sit on one already placed, as the tags of two sections
+ * side by side do. Each step is one tag's height, straight away from its own section.
+ */
+function spread<T extends { tag: ReturnType<typeof tagFor> }>(items: T[]) {
+  const placed: { x: number; y: number }[] = [];
+  const touches = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+    Math.abs(a.x - b.x) < TAG.x * 2 + 4 && Math.abs(a.y - b.y) < TAG.y * 2 + 4;
+  return items.map((item) => {
+    let { x, y } = item.tag;
+    for (
+      let step = 0;
+      step < 4 && placed.some((p) => touches(p, { x, y }));
+      step++
+    ) {
+      x += item.tag.away.x * (TAG.y * 2 + 6);
+      y += item.tag.away.y * (TAG.y * 2 + 6);
+    }
+    placed.push({ x, y });
+    return { ...item, tag: { ...item.tag, x, y } };
+  });
+}
+
 export function StadiumMap({
   map,
   sections,
@@ -219,7 +243,7 @@ export function StadiumMap({
       };
     }),
   );
-  const onSale = wedges.filter((item) => item.info);
+  const onSale = spread(wedges.filter((item) => item.info));
 
   return (
     <svg

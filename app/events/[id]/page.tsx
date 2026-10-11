@@ -17,7 +17,12 @@ import { holderOf, releasedTickets, soldTickets } from "@/lib/fairseat/store";
 import { readWallet } from "@/lib/fairseat/wallet";
 import { Button } from "@/components/lime/ui/button";
 import Link from "next/link";
-import { fromPrice, loadSides, type LiveSide } from "@/lib/fairseat/live";
+import {
+  fromPrice,
+  loadSides,
+  pricesOnSale,
+  type LiveSide,
+} from "@/lib/fairseat/live";
 import { SeatFinder } from "../../_components/seat-finder";
 import type { SectionInfo } from "../../_components/stadium-map";
 import { LiveRefresh } from "../../_components/live";
@@ -84,6 +89,11 @@ async function EventPageContent({
             )
           : seatSummary(seat, side),
       faceValue: seat.faceValue,
+      // Where clubs sell their own, the row shows the cheapest ticket that can be bought.
+      from:
+        event.teamWallets && side
+          ? (pricesOnSale(event, seat, side).sort((a, b) => a - b)[0] ?? null)
+          : undefined,
       href: `/events/${event.id}/seats/${seat.id}`,
     };
   });
@@ -91,10 +101,11 @@ async function EventPageContent({
   const sections: Record<string, SectionInfo> = {};
   for (const seat of event.seats) {
     const side = sideOf(seat);
-    if (!side || side.onSale.length === 0) continue;
-    const cheapest = Math.min(
-      ...side.onSale.map((outcome) => priceFor(seat, outcome.share)),
-    );
+    // Only what can be bought counts: where clubs sell their own, a team that has released
+    // nothing for this seat has no ticket to price.
+    const prices = side ? pricesOnSale(event, seat, side) : [];
+    if (prices.length === 0) continue;
+    const cheapest = Math.min(...prices);
     const known = sections[seat.section];
     sections[seat.section] = {
       seats: (known?.seats ?? 0) + 1,
