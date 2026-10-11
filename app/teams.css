@@ -1,0 +1,52 @@
+/* Fairseat's team colors. Lime has one accent and no second hue, so these are this app's own addition,
+   kept apart from Lime's tokens.
+
+   Each color is a pair: a strong step for a line, a bar segment or a dot, and a soft step for a fill
+   behind it. A team gets its color from its rank in the market: 1 is the likeliest team, 8 the eighth.
+   Every team past the eighth, and any team that is out, shares the neutral pair, --team-0.
+
+   Used only where teams are compared: the ownership bar, the odds chart and their legends. Never for
+   text, buttons or page backgrounds. */
+
+.lime {
+  --team-0: #8d919b;
+  --team-0-soft: #e6e6ea;
+  --team-1: #356ed8;
+  --team-1-soft: #dce8fe;
+  --team-2: #c9773a;
+  --team-2-soft: #f8dcc6;
+  --team-3: #1c7c54;
+  --team-3-soft: #dff5e8;
+  --team-4: #c28a00;
+  --team-4-soft: #ffeeb5;
+  --team-5: #7a55d1;
+  --team-5-soft: #e9e1fb;
+  --team-6: #c8443c;
+  --team-6-soft: #fde3e1;
+  --team-7: #1790a3;
+  --team-7-soft: #d5f1f5;
+  --team-8: #c84b8f;
+  --team-8-soft: #fbe0ee;
+}
+
+.lime[data-theme="dark"],
+[data-theme="dark"] .lime {
+  --team-0: #9a9ea8;
+  --team-0-soft: #2c2d31;
+  --team-1: #5e93f0;
+  --team-1-soft: #14244a;
+  --team-2: #e0935a;
+  --team-2-soft: #3d2413;
+  --team-3: #3fae82;
+  --team-3-soft: #0f2f22;
+  --team-4: #e0ab2b;
+  --team-4-soft: #3a2c05;
+  --team-5: #9c7ee6;
+  --team-5-soft: #261b47;
+  --team-6: #e2675f;
+  --team-6-soft: #401614;
+  --team-7: #3bb3c6;
+  --team-7-soft: #0b2f36;
+  --team-8: #e06fae;
+  --team-8-soft: #3d1529;
+}
