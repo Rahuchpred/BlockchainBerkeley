@@ -17,7 +17,7 @@ import {
   TableRow,
 } from "@/components/lime/ui/table";
 import { formatAmount } from "@/components/lime/ui/amount";
-import { seatLabel } from "@/lib/fairseat/data";
+import { BUYER_NAME, seatLabel } from "@/lib/fairseat/data";
 import { findEvent } from "@/lib/fairseat/events";
 import {
   allActivity,
@@ -101,7 +101,7 @@ async function WalletContent() {
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 pt-4 pb-8 sm:px-6 sm:pt-8">
       <header className="flex flex-col gap-2">
-        <h1 className="title-page">Wallet</h1>
+        <h1 className="title-page">{`${BUYER_NAME}'s wallet`}</h1>
         <p className="font-mono text-sm text-fg-2">
           {shortAddress(wallet.address)}, on the XRP Ledger testnet
         </p>

@@ -6,7 +6,12 @@ import {
   EmptyDescription,
   EmptyTitle,
 } from "@/components/lime/ui/empty";
-import { formatDate, placeOf, seatLabel } from "@/lib/fairseat/data";
+import {
+  BUYER_NAME,
+  formatDate,
+  placeOf,
+  seatLabel,
+} from "@/lib/fairseat/data";
 import { findEvent } from "@/lib/fairseat/events";
 import { viewTicket } from "@/lib/fairseat/live";
 import { qrShape } from "@/lib/fairseat/qr";
@@ -57,7 +62,7 @@ async function Wallet() {
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 pt-4 pb-8 sm:px-6 sm:pt-8">
-      <h1 className="title-page">My tickets</h1>
+      <h1 className="title-page">{`${BUYER_NAME}'s tickets`}</h1>
       {!wallet ? (
         <Empty>
           <EmptyTitle>No wallet yet</EmptyTitle>

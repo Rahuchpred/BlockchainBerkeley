@@ -180,23 +180,6 @@ async function Dashboard() {
         </Table>
       </section>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">NBA teams</h2>
-        <p className="max-w-xl text-sm leading-normal text-fg-2">
-          The 30 NBA teams sell their own tickets. Each team releases them from
-          its own wallet on the ledger and is paid into it.
-        </p>
-        <div>
-          <Button
-            variant="outline"
-            nativeButton={false}
-            render={<Link href="/organizer/nba" />}
-          >
-            Open the team desk
-          </Button>
-        </div>
-      </section>
-
       {teams.length > 0 && (
         <section className="flex flex-col gap-3">
           <h2 className="text-lg font-semibold">Tickets sold by team</h2>

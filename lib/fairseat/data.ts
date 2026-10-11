@@ -46,6 +46,11 @@ export type FairEvent = {
    * wallet, and a ticket is only on sale once its team has released it.
    */
   teamWallets?: boolean;
+  /**
+   * The whole arena is open: a team may release its ticket for any seat on its side, and `seats`
+   * is the seats some team has released. This is the full price of a seat in each ring, inner first.
+   */
+  ringPrices?: number[];
 };
 
 /** A ticket a fan holds. The id is the ticket's id on the ledger. */
@@ -56,6 +61,46 @@ export type Ticket = {
   /** The team's slug. */
   team: string;
   paid: number;
+};
+
+/** The demo's buyer: the username of the account that holds the fan wallet. */
+export const BUYER_NAME = "Mike";
+
+/** The username of the organizer account for the events the single organizer wallet sells. */
+export const HOUSE_NAME = "Fairseat";
+
+/** Each NBA team's code, by its name on Gemini. A team's organizer logs in with the code. */
+export const NBA_CODES: Record<string, string> = {
+  Atlanta: "ATL",
+  Boston: "BOS",
+  Brooklyn: "BKN",
+  Charlotte: "CHA",
+  Chicago: "CHI",
+  Cleveland: "CLE",
+  Detroit: "DET",
+  Indiana: "IND",
+  Miami: "MIA",
+  Milwaukee: "MIL",
+  "New York": "NYK",
+  Orlando: "ORL",
+  Philadelphia: "PHI",
+  Toronto: "TOR",
+  Washington: "WAS",
+  Dallas: "DAL",
+  Denver: "DEN",
+  "Golden State": "GSW",
+  Houston: "HOU",
+  "LA Clippers": "LAC",
+  "LA Lakers": "LAL",
+  Memphis: "MEM",
+  Minnesota: "MIN",
+  "New Orleans": "NOP",
+  "Oklahoma City": "OKC",
+  Phoenix: "PHX",
+  Portland: "POR",
+  Sacramento: "SAC",
+  "San Antonio": "SAS",
+  Utah: "UTA",
 };
 
 /** The share of each sale Fairseat keeps. */
@@ -147,15 +192,34 @@ export const EVENTS: FairEvent[] = [
       { id: "east", name: "Eastern Conference side", market: "NBAEAST27" },
       { id: "west", name: "Western Conference side", market: "NBAWEST27" },
     ],
-    seats: [
-      ...seats("east", "104", 900),
-      ...seats("west", "119", 900),
-      ...seats("east", "208", 420),
-      ...seats("west", "223", 420),
-    ],
+    // Filled in from what the teams have released: allEvents in lib/fairseat/events.ts.
+    seats: [],
     teamWallets: true,
+    ringPrices: [900, 420],
   },
 ];
+
+/** The sections of an open arena and the side each is on: the first half of a ring is the first side's. */
+export const openSections = (event: FairEvent) =>
+  event.map.rings.flatMap((ring, index) =>
+    Array.from({ length: ring.count }, (_, at) => ({
+      section: String(ring.first + at),
+      side: event.sides[at < ring.count / 2 ? 0 : 1].id,
+      faceValue: event.ringPrices?.[index] ?? 0,
+    })),
+  );
+
+/** A seat in an open arena, worked out from its id, or null if the arena has no such seat. */
+export function openSeat(event: FairEvent, seatId: string): Seat | null {
+  if (!event.ringPrices) return null;
+  const [section, row, seat] = seatId.split("-");
+  const found = openSections(event).find((item) => item.section === section);
+  const inRange = (value: string, most: number) =>
+    /^[1-9]\d*$/.test(value) && Number(value) <= most;
+  if (!found || !inRange(row, SECTION.rows) || !inRange(seat, SECTION.seats))
+    return null;
+  return { id: seatId, row, seat, ...found };
+}
 
 /** Gemini's one market for the whole league: which of the 30 teams wins the title. */
 export const NBA_MARKET = "NBAF-2627CHAMP";

@@ -16,6 +16,8 @@ export type EventSummary = {
   teams: { team: string; image: string | null }[];
   shares: Share[];
   from: number | null;
+  /** Its teams release their own tickets, and none has yet. */
+  unreleased?: boolean;
 };
 
 const SPORTS = ["All", "Football", "Baseball", "NBA"];
@@ -67,7 +69,9 @@ export function EventBrowser({ events }: { events: EventSummary[] }) {
                 <OwnershipBar shares={event.shares} legend={2} />
               )}
               <p className="text-sm text-fg-2">
-                {event.from === null
+                {event.unreleased
+                  ? "No tickets released yet"
+                  : event.from === null
                   ? "Finalists decided"
                   : `From ${formatAmount(event.from)}`}
               </p>

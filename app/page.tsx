@@ -38,6 +38,7 @@ async function Events() {
           .map((outcome) => ({ team: outcome.team, image: outcome.image })),
         shares: sides[0]?.onSale ?? [],
         from: fromPrice(event, sides),
+        unreleased: Boolean(event.ringPrices) && event.seats.length === 0,
       };
     }),
   );

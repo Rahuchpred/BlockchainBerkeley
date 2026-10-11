@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { Badge } from "@/components/lime/ui/badge";
@@ -12,19 +12,18 @@ import {
   TableRow,
 } from "@/components/lime/ui/table";
 import { formatAmount } from "@/components/lime/ui/amount";
-import { Icon, ArrowLeft } from "@/components/lime/icon";
 import {
-  NBA_CONFERENCES,
+  NBA_CODES,
   formatDate,
+  openSections,
   percent,
   placeOf,
   priceFor,
   seatLabel,
-  slug,
 } from "@/lib/fairseat/data";
 import { allEvents } from "@/lib/fairseat/events";
 import { loadSides } from "@/lib/fairseat/live";
-import { readTeam, teamName } from "@/lib/fairseat/team";
+import { readSession } from "@/lib/fairseat/session";
 import {
   allActivity,
   paidFor,
@@ -35,22 +34,18 @@ import {
 import { shortAddress } from "@/lib/fairseat/story";
 import { accountUrl, getTeamOrganizer, txUrl } from "@/lib/fairseat/xrpl";
 import { PageSkeleton } from "../../_components/page-skeleton";
-import { ReleaseList } from "../../_components/release-list";
+import { ReleaseChart } from "../../_components/release-chart";
 import { Stat } from "../../_components/stat";
-import { TeamPicker } from "../../_components/team-picker";
-
-const GROUPS = Object.values(NBA_CONFERENCES).map((conference) => ({
-  name: conference.title.replace(" Champion", ""),
-  teams: conference.teams.map((name) => ({ value: slug(name), label: name })),
-}));
 
 const sum = (values: number[]) =>
   values.reduce((total, value) => total + value, 0);
 
 async function Desk() {
   await connection();
-  const team = await readTeam();
-  const name = teamName(team) ?? team;
+  const session = await readSession();
+  // proxy.ts sends everyone else away before this page renders.
+  if (session?.kind !== "team") redirect("/login");
+  const { team, name } = session;
   // If the ledger cannot be reached, the page still loads and says so.
   const wallet = await getTeamOrganizer(team).catch(() => null);
   const sold = new Set(soldTickets().map((ticket) => ticket.nftId));
@@ -106,25 +101,13 @@ async function Desk() {
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 pt-4 pb-8 sm:px-6 sm:pt-8">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-start gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Back to the organizer page"
-            nativeButton={false}
-            render={<Link href="/organizer" />}
-            icon={<Icon icon={ArrowLeft} size={20} />}
-          />
-          <div className="flex flex-col gap-2">
-            <h1 className="title-page">{`${name} team desk`}</h1>
-            <p className="max-w-xl text-base leading-normal text-fg-2">
-              Each NBA team releases its own tickets from its own wallet on the
-              XRP Ledger, and is paid into that wallet.
-            </p>
-          </div>
-        </div>
-        <TeamPicker team={team} groups={GROUPS} />
+      <header className="flex flex-col gap-2">
+        <h1 className="title-page">{`${name} team desk`}</h1>
+        <p className="max-w-xl text-base leading-normal text-fg-2">
+          You are logged in as {NBA_CODES[name]}, the organizer for {name}. The
+          team releases its own tickets from its own wallet on the XRP Ledger,
+          and is paid into that wallet.
+        </p>
       </header>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -200,36 +183,29 @@ async function Desk() {
             {side.name}.{" "}
             {side.settled
               ? `${side.settled} made the final, so no more tickets can be released.`
-              : `A released ticket goes on sale at ${percent(outcome.share)} of its seat's full price, the team's share at the live odds.`}
+              : `Release the team's ticket for any seat on its side. It goes on sale at ${percent(outcome.share)} of the seat's full price, the team's share at the live odds.`}
           </p>
           {!side.settled && (
-            <ReleaseList
+            <ReleaseChart
               eventId={event.id}
               team={name}
+              map={event.map}
               ready={wallet?.ready ?? false}
-              rows={[
-                ...new Set(
-                  event.seats
-                    .filter((seat) => seat.side === side.id)
-                    .map((seat) => seat.section),
-                ),
-              ].map((section) => {
-                const seats = event.seats.filter(
-                  (seat) => seat.side === side.id && seat.section === section,
-                );
-                return {
-                  section,
-                  seats: seats.length,
-                  released: seats.filter((seat) =>
-                    mine.some(
-                      (ticket) =>
-                        ticket.eventId === event.id &&
-                        ticket.seatId === seat.id,
-                    ),
-                  ).length,
-                  price: priceFor(seats[0], outcome.share),
-                };
-              })}
+              released={mine
+                .filter((ticket) => ticket.eventId === event.id)
+                .map((ticket) => ticket.seatId)}
+              sections={Object.fromEntries(
+                openSections(event)
+                  .filter((item) => item.side === side.id)
+                  .map((item) => [
+                    item.section,
+                    {
+                      faceValue: item.faceValue,
+                      price:
+                        Math.round(item.faceValue * outcome.share * 100) / 100,
+                    },
+                  ]),
+              )}
             />
           )}
         </section>

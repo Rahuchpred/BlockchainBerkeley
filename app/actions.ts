@@ -7,6 +7,7 @@ import {
   feeFor,
   getSeat,
   getSide,
+  openSeat,
   priceFor,
   seats,
   slug,
@@ -18,7 +19,13 @@ import {
   type SecondOpinion,
 } from "@/lib/fairseat/context";
 import { loadSide } from "@/lib/fairseat/live";
-import { readTeam, saveTeam, teamName } from "@/lib/fairseat/team";
+import {
+  HOME,
+  accountFor,
+  clearSession,
+  readSession,
+  saveSession,
+} from "@/lib/fairseat/session";
 import {
   clearOffer,
   escrowFor,
@@ -99,6 +106,8 @@ export async function buyTeamTicket(
     const config = event && seat && getSide(event, seat.side);
     if (!event || !seat || !config)
       return { error: "That seat does not exist" };
+    if ((await readSession())?.kind !== "buyer")
+      return { error: "Log in as a buyer to buy a ticket" };
 
     // The price is worked out here from the live market, never taken from the browser.
     const side = await loadSide(config);
@@ -191,26 +200,44 @@ export async function buyTeamTicket(
   redirect(`/tickets/${nftId}?bought=${hash}`);
 }
 
-/** Picks the team this browser organizes for. */
-export async function chooseTeam(team: string): Promise<void> {
-  if (!teamName(team)) return;
-  await saveTeam(team);
+/** Demo login: opens the account a username belongs to. There is no password. */
+export async function logIn(username: string): Promise<ActionResult> {
+  const account = accountFor(username);
+  const session = account && (await saveSession(account));
+  if (!session) return { error: "There is no account with that username" };
   revalidatePath("/", "layout");
+  redirect(HOME[session.kind]);
 }
 
+export async function logOut(): Promise<void> {
+  await clearSession();
+  revalidatePath("/", "layout");
+  redirect("/login");
+}
+
+/** The most seats one release mints. Each eight are one Batch on the ledger. */
+const RELEASE_LIMIT = 32;
+
 /**
- * Releases the organizer's team's tickets for every seat it has not yet released in one section.
+ * Releases the logged-in team's tickets for the seats it picked, anywhere on its side of the arena.
  * They are minted on the ledger from the team's own organizer wallet, which is set up on first use.
  */
-export async function releaseSection(
+export async function releaseSeats(
   eventId: string,
-  section: string,
+  seatIds: string[],
 ): Promise<ActionResult> {
   try {
-    const team = await readTeam();
+    const session = await readSession();
+    if (session?.kind !== "team")
+      return { error: "Log in as a team's organizer to release tickets" };
+    const { team } = session;
     const event = findEvent(eventId);
-    if (!event?.teamWallets)
+    if (!event?.teamWallets || !event.ringPrices)
       return { error: "This event's tickets are not released by its teams" };
+    const picked = [...new Set(seatIds)];
+    if (picked.length === 0) return { error: "Pick at least one seat" };
+    if (picked.length > RELEASE_LIMIT)
+      return { error: `Release up to ${RELEASE_LIMIT} seats at a time` };
     // A team has tickets only for the seats on its own side.
     const sides = await Promise.all(event.sides.map(loadSide));
     const side = sides.find((item) =>
@@ -218,12 +245,15 @@ export async function releaseSection(
     );
     if (!side) return { error: "That team is not in this event" };
     if (side.settled) return { error: "The finalist is already decided" };
-    const records = event.seats
-      .filter((seat) => seat.side === side.id && seat.section === section)
-      .filter((seat) => !releasedTicket(ticketKey(eventId, seat.id, team)))
-      .map((seat) => ({ eventId, seatId: seat.id, team, paid: 0 }));
+    // The seats are checked here against the arena, never trusted from the browser.
+    const seats = picked.map((id) => openSeat(event, id));
+    if (seats.some((seat) => seat?.side !== side.id))
+      return { error: "Pick seats on your own team's side of the arena" };
+    const records = picked
+      .filter((id) => !releasedTicket(ticketKey(eventId, id, team)))
+      .map((seatId) => ({ eventId, seatId, team, paid: 0 }));
     if (records.length === 0)
-      return { error: "Every ticket in this section is already released" };
+      return { error: "Those tickets are already released" };
 
     await setUpTeamOrganizer(team);
     const released = await releaseTickets(team, records);

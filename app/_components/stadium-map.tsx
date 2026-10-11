@@ -118,12 +118,15 @@ export function StadiumMap({
   selected,
   onSelect,
   label,
+  plain,
 }: {
   map: VenueMap;
   sections: Record<string, SectionInfo>;
   selected: string | null;
   onSelect: (section: string | null) => void;
   label: string;
+  /** Leaves out the tags, for a map where every section can be picked and the tags would pile up. */
+  plain?: boolean;
 }) {
   const wedges = map.rings.flatMap((ring, ringIndex) =>
     Array.from({ length: ring.count }, (_, index) => {
@@ -183,7 +186,7 @@ export function StadiumMap({
                   : "fill-accent group-hover/section:fill-accent-hover",
               )}
             />
-            <g aria-hidden="true">
+            <g aria-hidden="true" className={plain ? "hidden" : undefined}>
               <rect
                 x={item.tag.x - 34}
                 y={item.tag.y - 13}

@@ -113,7 +113,9 @@ async function EventPageContent({
         )}
         <p className="max-w-xl text-sm leading-normal text-fg-2">
           Nobody knows the finalists yet, so each seat has one ticket per team.
-          {from === null
+          {event.ringPrices && event.seats.length === 0
+            ? " No team has released tickets yet."
+            : from === null
             ? " The finalists are decided, so the tickets for them are now real seats."
             : ` Tickets start at ${formatAmount(from)}.`}
         </p>

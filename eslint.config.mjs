@@ -15,6 +15,8 @@ const eslintConfig = defineConfig([
         rules: {
           "no-raw-color": { create: () => ({}) },
           "one-primary": { create: () => ({}) },
+          "no-native-control": { create: () => ({}) },
+          "lime-scarce": { create: () => ({}) },
         },
       },
     },
