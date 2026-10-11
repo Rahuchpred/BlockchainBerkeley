@@ -59,6 +59,39 @@ function Field({ kind }: { kind: VenueMap["field"] }) {
       </g>
     );
   }
+  if (kind === "soccer") {
+    return (
+      <g className="fill-none stroke-line-strong" strokeWidth={1}>
+        <rect
+          x={CX - 104}
+          y={CY - 60}
+          width={208}
+          height={120}
+          rx={2}
+          className="fill-success-tint"
+        />
+        <line x1={CX} x2={CX} y1={CY - 60} y2={CY + 60} />
+        <circle cx={CX} cy={CY} r={18} />
+        {/* The penalty area and the goal area at each end. */}
+        {[-1, 1].map((end) => (
+          <g key={end}>
+            <rect
+              x={end < 0 ? CX - 104 : CX + 72}
+              y={CY - 36}
+              width={32}
+              height={72}
+            />
+            <rect
+              x={end < 0 ? CX - 104 : CX + 92}
+              y={CY - 16}
+              width={12}
+              height={32}
+            />
+          </g>
+        ))}
+      </g>
+    );
+  }
   return (
     <g>
       <rect

@@ -7,9 +7,12 @@ export type Share = { team: string; share: number; tone: number };
 export function OwnershipBar({
   shares,
   legend = 4,
+  label = "Share of the seat by team",
 }: {
   shares: Share[];
   legend?: number;
+  /** What the bar shows, for a screen reader. */
+  label?: string;
 }) {
   const named = shares.filter((item) => item.tone > 0);
   const rest = shares.filter((item) => item.tone === 0 && item.share > 0);
@@ -26,7 +29,7 @@ export function OwnershipBar({
     <div className="flex flex-col gap-3">
       <div
         role="img"
-        aria-label={`Share of the seat by team: ${summary}`}
+        aria-label={`${label}: ${summary}`}
         className="flex h-3 w-full gap-0.5 overflow-hidden rounded-full"
       >
         {named.map((item) => (

@@ -1,11 +1,13 @@
 import { Suspense } from "react";
 import { formatDate, placeOf } from "@/lib/fairseat/data";
 import { allEvents } from "@/lib/fairseat/events";
-import { fromPrice, loadSides } from "@/lib/fairseat/live";
+import { fromPrice, loadSides, loadWatched } from "@/lib/fairseat/live";
 import { EventBrowser } from "../_components/event-browser";
 import { PageSkeleton } from "../_components/page-skeleton";
+import { WatchList } from "../_components/watch-list";
 
 async function Events() {
+  const watching = loadWatched();
   const events = await Promise.all(
     allEvents().map(async (event) => {
       const sides = await loadSides(event);
@@ -23,6 +25,7 @@ async function Events() {
           .map((outcome) => ({ team: outcome.team, image: outcome.image })),
         shares: sides[0]?.onSale ?? [],
         from: fromPrice(event, sides),
+        note: event.note,
       };
     }),
   );
@@ -37,6 +40,7 @@ async function Events() {
         </p>
       </header>
       <EventBrowser events={events} />
+      <WatchList markets={await watching} />
     </main>
   );
 }

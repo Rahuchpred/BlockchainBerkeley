@@ -18,11 +18,11 @@ export type Seat = {
   faceValue: number;
 };
 
-export type Sport = "Football" | "Baseball";
+export type Sport = "Football" | "Baseball" | "Soccer";
 
 /** The shape of a venue's seating bowl: rings of numbered sections around the field, inner ring first. */
 export type VenueMap = {
-  field: "football" | "baseball";
+  field: "football" | "baseball" | "soccer";
   rings: { first: number; count: number }[];
 };
 
@@ -41,6 +41,8 @@ export type FairEvent = {
   seats: Seat[];
   /** For an event an organizer listed: the site whose page its details were checked against. */
   checkedAgainst?: string;
+  /** What decides the seat, when it is not a place in this event's own final. */
+  note?: string;
 };
 
 /** A ticket a fan holds. The id is the ticket's id on the ledger. */
@@ -123,6 +125,34 @@ export const EVENTS: FairEvent[] = [
     ],
     seats: [...seats("al", "24", 480), ...seats("nl", "41", 480)],
   },
+  // Gemini prices who wins the Champions League, not who reaches its final, so it cannot price a
+  // seat at that final. The winner does play the Super Cup, at a venue UEFA fixed in advance.
+  {
+    id: "uefa-super-cup-2027",
+    title: "UEFA Super Cup 2027",
+    sport: "Soccer",
+    date: "2027-08-11",
+    venue: "Johan Cruyff ArenA",
+    city: "Amsterdam, Netherlands",
+    officialUrl:
+      "https://www.uefa.com/uefasupercup/news/02a9-2198b459d375-97fdf1034979-1000--2027-and-2028-super-cup-venues-confirmed/",
+    map: {
+      field: "soccer",
+      rings: [
+        { first: 101, count: 36 },
+        { first: 401, count: 36 },
+      ],
+    },
+    sides: [
+      {
+        id: "ucl",
+        name: "Champions League winner's side",
+        market: "UCL2627",
+      },
+    ],
+    seats: [...seats("ucl", "112", 900), ...seats("ucl", "418", 420)],
+    note: "Yours if your team wins the Champions League",
+  },
 ];
 
 export const slug = (team: string) =>
@@ -176,7 +206,55 @@ export const MARKETS: Record<
     side: "National League side",
     map: { field: "baseball", rings: [{ first: 1, count: 48 }] },
   },
+  UCL2627: {
+    label: "Champions League Winner",
+    sport: "Soccer",
+    side: "Champions League winner's side",
+    map: { field: "soccer", rings: [{ first: 101, count: 36 }] },
+  },
 };
+
+/**
+ * Gemini sports markets Fairseat shows the odds of but sells no tickets on, each with the reason
+ * in one line.
+ */
+export const WATCHING: { market: string; reason: string }[] = [
+  {
+    market: "CFBPLAYOFF2627",
+    reason: "Twelve teams qualify, so one seat cannot go to one winner.",
+  },
+  {
+    market: "PROFB2027",
+    reason:
+      "This prices who wins the final, not who plays in it. The conference markets price the seats.",
+  },
+  {
+    market: "BASEBALL26",
+    reason:
+      "This prices who wins the series, not who plays in it. The league markets price the seats.",
+  },
+  {
+    market: "NBAF-2627CHAMP",
+    reason:
+      "The finals are played in the two finalists' own arenas, so no seat is known yet.",
+  },
+  {
+    market: "NHLSTANLEYCUP27",
+    reason:
+      "The final is played in the two finalists' own rinks, so no seat is known yet.",
+  },
+  {
+    market: "MLSCUP26",
+    reason:
+      "The final is hosted by one of the finalists, so the stadium is not known yet.",
+  },
+  {
+    market: "EPLCHAMP27",
+    reason: "A league title is won over a season. There is no final to seat.",
+  },
+  { market: "MLSEAST26", reason: "No one is trading this yet." },
+  { market: "MLSWEST26", reason: "No one is trading this yet." },
+];
 
 export const seatLabel = (seat: Seat) =>
   `Section ${seat.section}, row ${seat.row}, seat ${seat.seat}`;
