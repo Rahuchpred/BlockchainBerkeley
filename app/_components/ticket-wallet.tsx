@@ -11,6 +11,7 @@ import {
 } from "@/components/lime/ui/empty";
 import { Segmented, SegmentedItem } from "@/components/lime/ui/segmented";
 import { formatAmount } from "@/components/lime/ui/amount";
+import type { Condition } from "@/lib/fairseat/data";
 import type { TicketStatus } from "@/lib/fairseat/live";
 import type { QrShape } from "@/lib/fairseat/qr";
 import { QrCode } from "./qr-code";
@@ -19,6 +20,8 @@ export type WalletTicket = {
   id: string;
   status: TicketStatus;
   team: string;
+  /** What the team must do for the ticket to become the seat. */
+  condition: Condition;
   image: string | null;
   event: string;
   date: string;
@@ -48,7 +51,7 @@ const STATUS: Record<
 function worthLine(ticket: WalletTicket) {
   if (ticket.status === "live") return "Your seat. Show the code at the gate.";
   if (ticket.status === "expired")
-    return `${ticket.team} did not make the final.`;
+    return `${ticket.team} did not ${ticket.condition.make}.`;
   return `Worth ${formatAmount(ticket.worth)} now`;
 }
 
@@ -95,7 +98,7 @@ export function TicketWallet({ tickets }: { tickets: WalletTicket[] }) {
                     {STATUS[ticket.status].label}
                   </Badge>
                 </div>
-                <CardTitle>{`If ${ticket.team} make the final`}</CardTitle>
+                <CardTitle>{`If ${ticket.team} ${ticket.condition.make}`}</CardTitle>
                 <div className="flex flex-col gap-1">
                   <CardDescription>{ticket.event}</CardDescription>
                   <CardDescription>{ticket.date}</CardDescription>

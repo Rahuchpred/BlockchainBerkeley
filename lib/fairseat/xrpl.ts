@@ -53,7 +53,6 @@ export const explorerTxUrl = (hash: string) =>
   `${EXPLORER}/transactions/${hash}`;
 export const explorerAccountUrl = (address: string) =>
   `${EXPLORER}/accounts/${address}`;
-export const explorerTicketUrl = (nftId: string) => `${EXPLORER}/nft/${nftId}`;
 
 // One connection is kept open and shared. Opening a new one for every read gets the app turned
 // away by the public testnet server after a few page loads.
@@ -433,6 +432,48 @@ export function buyTickets(
   });
 }
 
+/** Whether an escrow is on the ledger now. One that was released or taken back is not. */
+async function escrowExists(
+  client: Client,
+  escrow: { owner: string; sequence: number },
+) {
+  try {
+    await client.request({
+      command: "ledger_entry",
+      escrow: { owner: escrow.owner, seq: escrow.sequence },
+      ledger_index: "validated",
+    });
+    return true;
+  } catch (error) {
+    const code = (error as { data?: { error?: string } }).data?.error;
+    if (code === "entryNotFound") return false;
+    throw error;
+  }
+}
+
+/** The ids of every NFT an account holds now. An account that is not on the ledger holds none. */
+async function nftsIn(client: Client, holder: string) {
+  const held = new Set<string>();
+  let marker: unknown;
+  try {
+    do {
+      const page = await client.request({
+        command: "account_nfts",
+        account: holder,
+        ledger_index: "validated",
+        limit: 400,
+        marker,
+      });
+      for (const nft of page.result.account_nfts) held.add(nft.NFTokenID);
+      marker = page.result.marker;
+    } while (marker);
+  } catch (error) {
+    const code = (error as { data?: { error?: string } }).data?.error;
+    if (code !== "actNotFound") throw error;
+  }
+  return held;
+}
+
 /**
  * Gives a fan back a payment that was never released. The ledger allows it only to be undone once
  * the escrow's deadline has passed, and only while the escrow still exists.
@@ -453,7 +494,33 @@ export function refundEscrow(
       { wallet: fan },
     );
     assertOk(cancel.result.meta, "Taking the money back");
+    // The result is not taken on trust: the escrow must be gone from the ledger.
+    if (await escrowExists(client, escrow))
+      throw new Error("The ledger still holds the payment");
     return { hash: cancel.result.hash };
+  });
+}
+
+/**
+ * Removes a ticket from whoever holds it. The organizer can do this because every ticket is minted
+ * burnable. The holder's wallet is read back to confirm it is gone.
+ */
+export function burnTicket(nftId: string, holder: string) {
+  return withClient(async (client) => {
+    const house = organizer();
+    const burn = await client.submitAndWait(
+      {
+        TransactionType: "NFTokenBurn",
+        Account: house.address,
+        Owner: holder,
+        NFTokenID: nftId,
+      },
+      { wallet: house },
+    );
+    assertOk(burn.result.meta, "Removing the ticket");
+    if ((await nftsIn(client, holder)).has(nftId))
+      throw new Error("The ledger still holds the ticket");
+    return { hash: burn.result.hash };
   });
 }
 
@@ -466,58 +533,145 @@ export type Settlement = {
 };
 
 /**
+ * What the ledger shows a settlement did to one thing. "done": it was there before and is gone
+ * after. "gone": it was not there to act on. "failed": it is still there.
+ */
+export type SettleOutcome = "done" | "gone" | "failed";
+
+/** What settling did for one ticket, read back from the ledger. Null where nothing was asked. */
+export type Settled = {
+  nftId: string;
+  release: SettleOutcome | null;
+  burn: SettleOutcome | null;
+  /** The transaction that released the payment, and the one that burned the ticket. */
+  releaseHash?: string;
+  burnHash?: string;
+  /** The ledger's reason, when a part was turned away. */
+  why?: string;
+};
+
+/**
  * Settles tickets once the finalists are decided: releases each payment to the organizer and burns
- * the tickets for teams that missed out. Returns the transactions that did it.
+ * the tickets for teams that missed out. A Batch is recorded as a success even when its parts were
+ * turned away, so every escrow and ticket is read from the ledger before and after. Returns what
+ * really happened to each ticket and the transactions that did it.
  */
 export function settleTickets(
   tickets: Settlement[],
-): Promise<{ hashes: string[]; byTicket: Record<string, string> }> {
+): Promise<{ hashes: string[]; tickets: Settled[] }> {
   return withClient(async (client) => {
     const house = organizer();
-    const parts = tickets.flatMap((ticket) => [
-      ...(ticket.escrow
-        ? [
-            {
-              nftId: ticket.nftId,
-              tx: {
-                TransactionType: "EscrowFinish",
-                Account: house.address,
-                Owner: ticket.escrow.owner,
-                OfferSequence: ticket.escrow.sequence,
-                Condition: escrowLock(ticket.nftId).condition,
-                Fulfillment: escrowLock(ticket.nftId).fulfillment,
-              },
-            },
-          ]
-        : []),
-      ...(ticket.burnFrom
-        ? [
-            {
-              nftId: ticket.nftId,
-              tx: {
-                TransactionType: "NFTokenBurn",
-                Account: house.address,
-                Owner: ticket.burnFrom,
-                NFTokenID: ticket.nftId,
-              },
-            },
-          ]
-        : []),
-    ]);
-    const hashes: string[] = [];
-    const byTicket: Record<string, string> = {};
-    for (let at = 0; at < parts.length; at += BATCH_LIMIT) {
-      const chunk = parts.slice(at, at + BATCH_LIMIT);
-      const done = await submitTogether(
+    type Part = {
+      kind: "release" | "burn";
+      about: Settled;
+      from: Settlement;
+      tx: Record<string, unknown>;
+    };
+
+    /** The parts whose escrow or ticket is on the ledger right now. */
+    const present = async (parts: Part[]) => {
+      const wallets = new Map<string, Set<string>>();
+      const there: Part[] = [];
+      for (const part of parts) {
+        const { escrow, burnFrom, nftId } = part.from;
+        if (part.kind === "release") {
+          if (escrow && (await escrowExists(client, escrow))) there.push(part);
+          continue;
+        }
+        if (!burnFrom) continue;
+        if (!wallets.has(burnFrom))
+          wallets.set(burnFrom, await nftsIn(client, burnFrom));
+        if (wallets.get(burnFrom)?.has(nftId)) there.push(part);
+      }
+      return there;
+    };
+
+    const settled: Settled[] = [];
+    const asked: Part[] = [];
+    for (const ticket of tickets) {
+      const about: Settled = { nftId: ticket.nftId, release: null, burn: null };
+      settled.push(about);
+      if (ticket.escrow)
+        asked.push({
+          kind: "release",
+          about,
+          from: ticket,
+          tx: {
+            TransactionType: "EscrowFinish",
+            Account: house.address,
+            Owner: ticket.escrow.owner,
+            OfferSequence: ticket.escrow.sequence,
+            Condition: escrowLock(ticket.nftId).condition,
+            Fulfillment: escrowLock(ticket.nftId).fulfillment,
+          },
+        });
+      if (ticket.burnFrom)
+        asked.push({
+          kind: "burn",
+          about,
+          from: ticket,
+          tx: {
+            TransactionType: "NFTokenBurn",
+            Account: house.address,
+            Owner: ticket.burnFrom,
+            NFTokenID: ticket.nftId,
+          },
+        });
+    }
+
+    // Only what is on the ledger is sent. One part with nothing to act on would undo the Batch.
+    const parts = await present(asked);
+    for (const part of asked)
+      if (!parts.includes(part)) part.about[part.kind] = "gone";
+
+    const mark = (part: Part, outcome: SettleOutcome, hash?: string) => {
+      part.about[part.kind] = outcome;
+      if (hash) part.about[`${part.kind}Hash`] = hash;
+    };
+    const submit = (list: Part[]) =>
+      submitTogether(
         client,
         house,
-        chunk.map((part) => part.tx),
+        list.map((part) => part.tx),
         "Settling the tickets",
+      ).then(
+        (done) => ({ hash: done.hash as string | null, why: undefined }),
+        (error: unknown) => ({
+          hash: null,
+          why: error instanceof Error ? error.message : String(error),
+        }),
       );
-      hashes.push(done.hash);
-      for (const part of chunk) byTicket[part.nftId] = done.hash;
+
+    const hashes: string[] = [];
+    for (let at = 0; at < parts.length; at += BATCH_LIMIT) {
+      const chunk = parts.slice(at, at + BATCH_LIMIT);
+      const together = await submit(chunk);
+      const left = await present(chunk);
+      if (together.hash && left.length < chunk.length)
+        hashes.push(together.hash);
+      for (const part of chunk)
+        if (!left.includes(part))
+          mark(part, "done", together.hash ?? undefined);
+      // Whatever the Batch left behind is sent again one at a time. A transaction on its own
+      // reports its own result, and one bad part no longer holds back the rest.
+      if (chunk.length === 1) {
+        for (const part of left) {
+          mark(part, "failed");
+          part.about.why = together.why;
+        }
+        continue;
+      }
+      for (const part of left) {
+        const alone = await submit([part]);
+        const still = (await present([part])).length > 0;
+        if (alone.hash && !still) hashes.push(alone.hash);
+        mark(part, still ? "failed" : "done", alone.hash ?? undefined);
+        if (still)
+          part.about.why =
+            alone.why ?? "The ledger did not apply the transaction";
+      }
     }
-    return { hashes, byTicket };
+    return { hashes, tickets: settled };
   });
 }
 

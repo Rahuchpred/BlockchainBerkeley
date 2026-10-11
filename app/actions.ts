@@ -35,6 +35,7 @@ import {
   clearOffer,
   escrowFor,
   findOffer,
+  forgetTicket,
   holderOf,
   ledgerSettlement,
   logActivity,
@@ -43,6 +44,7 @@ import {
   recordHolder,
   recordPaid,
   recordSale,
+  recordSettled,
   recordSettlement,
   saveEscrow,
   saveEvent,
@@ -57,6 +59,7 @@ import { readWallet, saveWallet } from "@/lib/fairseat/wallet";
 import {
   GROUP_LIMIT,
   acceptOffer,
+  burnTicket,
   buyTickets,
   cancelOffer,
   createFanWallet,
@@ -424,10 +427,16 @@ export async function claimTicket(offerId: string): Promise<ActionResult> {
 }
 
 /**
- * Gives a fan back a payment that was never released to the organizer. Only the wallet that paid
- * can ask, only while the payment is still locked, and only once its deadline has passed.
+ * Gives a fan back a payment that was never released to the organizer, and takes the ticket back
+ * in return: it is burned and its seat goes on sale again. Only the wallet that paid can ask, only
+ * while it still holds the ticket and the payment is still locked, and only once the deadline has
+ * passed. With `leave`, the fan is sent to their tickets afterwards, as the ticket's page is gone.
  */
-export async function takeRefund(nftId: string): Promise<ActionResult> {
+export async function takeRefund(
+  nftId: string,
+  leave = false,
+): Promise<ActionResult> {
+  let unburned = false;
   try {
     const wallet = await readWallet();
     const escrow = escrowFor(nftId);
@@ -443,8 +452,16 @@ export async function takeRefund(nftId: string): Promise<ActionResult> {
       return {
         error: `This payment can be taken back from ${formatDeadline(after, now)}`,
       };
+    // The money comes back only in exchange for the ticket. A fan who sold it or gave it away has
+    // nothing to hand back, so their payment stays where it is.
+    if (!(await heldTicket(nftId)))
+      return {
+        error:
+          "You no longer hold this ticket, so its payment cannot be taken back.",
+      };
     let hash: string;
     try {
+      // This also confirms on the ledger that the escrow is gone, before the ticket is touched.
       ({ hash } = await refundEscrow(wallet.seed, escrow));
     } catch (error) {
       // The ledger keeps its own clock, a few seconds behind this one.
@@ -463,10 +480,28 @@ export async function takeRefund(nftId: string): Promise<ActionResult> {
       hash,
       to: wallet.address,
     });
+    const burn = await burnTicket(nftId, wallet.address).catch(() => null);
+    if (burn) {
+      logActivity({
+        ...ticket,
+        kind: "burned",
+        returned: true,
+        hash: burn.hash,
+        from: wallet.address,
+      });
+      // The sale is forgotten, so this team's ticket for the seat can be bought again.
+      forgetTicket(nftId);
+    } else unburned = true;
   } catch (error) {
     return { error: message(error) };
   }
   revalidatePath("/", "layout");
+  if (unburned)
+    return {
+      error:
+        "Your money is back, but the ticket could not be removed from the ledger. The seat stays marked as sold.",
+    };
+  if (leave) redirect("/tickets");
 }
 
 /** Demo only: makes new purchases refundable after a few minutes, so the refund can be shown. */
@@ -550,7 +585,14 @@ export async function publishEvent(input: NewEvent): Promise<PublishResult> {
     city: "",
     officialUrl: input.link,
     map: market.map,
-    sides: [{ id: "side", name: market.side, market: input.market }],
+    sides: [
+      {
+        id: "side",
+        name: market.side,
+        market: input.market,
+        ...(market.condition && { condition: market.condition }),
+      },
+    ],
     seats: seats("side", String(section), Math.round(input.price * 100) / 100),
     checkedAgainst: result.page,
   });
@@ -601,13 +643,22 @@ export async function settleOnLedger(
         },
       ];
     });
-    const { hashes, byTicket } = await settleTickets(tickets);
-    const released = tickets.filter((ticket) => ticket.escrow);
-    const burned = tickets.filter((ticket) => ticket.burnFrom);
-    recordSettlement(
-      ticker,
-      hashes,
-      released.map((ticket) => ticket.nftId),
+    // What happened is read back from the ledger for each ticket, and only that is recorded.
+    const { hashes, tickets: outcomes } = await settleTickets(tickets);
+    const outcome = new Map(outcomes.map((item) => [item.nftId, item]));
+    const released = tickets.filter(
+      (ticket) => outcome.get(ticket.nftId)?.release === "done",
+    );
+    const burned = tickets.filter(
+      (ticket) => outcome.get(ticket.nftId)?.burn === "done",
+    );
+    // A payment the ledger no longer holds was released or taken back some other way. Its record
+    // is dropped, since there is nothing left to release, but it is not counted as released here.
+    const missing = tickets.filter(
+      (ticket) => outcome.get(ticket.nftId)?.release === "gone",
+    );
+    recordSettled(
+      [...released, ...missing].map((ticket) => ticket.nftId),
       burned.map((ticket) => ticket.nftId),
     );
     logActivity(
@@ -615,18 +666,38 @@ export async function settleOnLedger(
         ...ticket.about,
         kind: "released" as const,
         amount: ticket.escrow?.amount,
-        hash: byTicket[ticket.nftId],
+        hash: outcome.get(ticket.nftId)?.releaseHash,
         from: ticket.escrow?.owner,
         to: organizerAddress(),
       })),
       ...burned.map((ticket) => ({
         ...ticket.about,
         kind: "burned" as const,
-        hash: byTicket[ticket.nftId],
+        hash: outcome.get(ticket.nftId)?.burnHash,
         from: ticket.burnFrom ?? undefined,
       })),
     );
     revalidatePath("/", "layout");
+
+    const count = (n: number, one: string, many: string) =>
+      `${n} ${n === 1 ? one : many}`;
+    const unreleased = outcomes.filter((item) => item.release === "failed");
+    const unburned = outcomes.filter((item) => item.burn === "failed");
+    const problems = [
+      unreleased.length &&
+        `${count(unreleased.length, "payment was", "payments were")} not released and ${unreleased.length === 1 ? "is" : "are"} still locked`,
+      missing.length &&
+        `${count(missing.length, "payment was", "payments were")} not released because the ledger no longer holds ${missing.length === 1 ? "it" : "them"}`,
+      unburned.length &&
+        `${count(unburned.length, "expired ticket was", "expired tickets were")} not burned`,
+    ].filter(Boolean);
+    if (problems.length) {
+      const why = [...unreleased, ...unburned].find((item) => item.why)?.why;
+      return {
+        error: `This side is not settled yet: ${problems.join(", ")}. ${released.length ? `${count(released.length, "payment was", "payments were")} released. ` : ""}Run it again.${why ? ` The ledger said: ${why}` : ""}`,
+      };
+    }
+    recordSettlement(ticker, hashes);
     return {
       released: released.length,
       dollars: released.reduce(

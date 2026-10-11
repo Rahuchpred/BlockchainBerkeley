@@ -1,12 +1,61 @@
 // The events and their seats. Odds, prices, images and results are not here: they come live
 // from Gemini, through lib/fairseat/live.ts.
 
+/**
+ * What a team must do for its ticket to become the seat, in each form a sentence needs. A side
+ * without one is decided by who makes this event's own final.
+ */
+export type Condition = {
+  /** After "If the team": "make the final". */
+  make: string;
+  /** After "the team that": "makes the final". */
+  makes: string;
+  /** After the team's name, once it has: "made the final". */
+  made: string;
+  /** After "chance of": "making the final". */
+  making: string;
+  /** After the team's name, once it is out: "missed the final". */
+  missed: string;
+  /** What every ticket waits for: "the finalists are decided". */
+  decided: string;
+};
+
 export type Side = {
   id: string;
   name: string;
   /** The Gemini market that prices and settles this side. */
   market: string;
+  /** Set when the market prices something other than a place in this event's own final. */
+  condition?: Condition;
 };
+
+const MAKES_THE_FINAL: Condition = {
+  make: "make the final",
+  makes: "makes the final",
+  made: "made the final",
+  making: "making the final",
+  missed: "missed the final",
+  decided: "the finalists are decided",
+};
+
+const WINS_THE_CHAMPIONS_LEAGUE: Condition = {
+  make: "win the Champions League",
+  makes: "wins the Champions League",
+  made: "won the Champions League",
+  making: "winning the Champions League",
+  missed: "did not win the Champions League",
+  decided: "the Champions League winner is decided",
+};
+
+/** The words for what decides a side's seats. */
+export const conditionOf = (side?: { condition?: Condition } | null) =>
+  side?.condition ?? MAKES_THE_FINAL;
+
+/** Who a side's seats are for, to follow "for fans of" or "a fan of". */
+export const fansOf = (side: Pick<Side, "name" | "condition">) =>
+  side.condition
+    ? `the team that ${side.condition.makes}`
+    : `the ${side.name.replace(/ side$/, "")} team that makes the final`;
 
 export type Seat = {
   id: string;
@@ -41,8 +90,6 @@ export type FairEvent = {
   seats: Seat[];
   /** For an event an organizer listed: the site whose page its details were checked against. */
   checkedAgainst?: string;
-  /** What decides the seat, when it is not a place in this event's own final. */
-  note?: string;
 };
 
 /** A ticket a fan holds. The id is the ticket's id on the ledger. */
@@ -148,10 +195,10 @@ export const EVENTS: FairEvent[] = [
         id: "ucl",
         name: "Champions League winner's side",
         market: "UCL2627",
+        condition: WINS_THE_CHAMPIONS_LEAGUE,
       },
     ],
     seats: [...seats("ucl", "112", 900), ...seats("ucl", "418", 420)],
-    note: "Yours if your team wins the Champions League",
   },
 ];
 
@@ -213,7 +260,13 @@ export const placeOf = (event: FairEvent) =>
 /** The markets an organizer can price an event with, and the kind of venue each one implies. */
 export const MARKETS: Record<
   string,
-  { label: string; sport: Sport; side: string; map: VenueMap }
+  {
+    label: string;
+    sport: Sport;
+    side: string;
+    map: VenueMap;
+    condition?: Condition;
+  }
 > = {
   AFCCHAMP27: {
     label: "AFC Championship Winner",
@@ -244,6 +297,7 @@ export const MARKETS: Record<
     sport: "Soccer",
     side: "Champions League winner's side",
     map: { field: "soccer", rings: [{ first: 101, count: 36 }] },
+    condition: WINS_THE_CHAMPIONS_LEAGUE,
   },
 };
 

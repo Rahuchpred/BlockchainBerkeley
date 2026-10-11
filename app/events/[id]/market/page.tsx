@@ -14,7 +14,7 @@ import {
 } from "@/components/lime/ui/table";
 import { formatAmount } from "@/components/lime/ui/amount";
 import { Icon, ArrowLeft } from "@/components/lime/icon";
-import { percent, seatLabel } from "@/lib/fairseat/data";
+import { conditionOf, percent, seatLabel } from "@/lib/fairseat/data";
 import { findEvent } from "@/lib/fairseat/events";
 import { getHistory } from "@/lib/fairseat/gemini";
 import { loadSides } from "@/lib/fairseat/live";
@@ -98,8 +98,7 @@ async function MarketContent({
         <div className="flex flex-col gap-1">
           <h1 className="title-page">{`${event.title} market`}</h1>
           <p className="max-w-xl text-base leading-normal text-fg-2">
-            Each team&apos;s chance of making the final, from Gemini&apos;s
-            prediction market. These chances set every ticket price.
+            {`Each team's chance of ${conditionOf(sides[0]).making}, from Gemini's prediction market. These chances set every ticket price.`}
           </p>
         </div>
       </header>
@@ -131,7 +130,7 @@ async function MarketContent({
           <h2 className="text-lg font-semibold">{side.name}</h2>
           {side.settled ? (
             <p className="text-base leading-normal text-fg-2">
-              {side.settled} made the final. This side has settled.
+              {`${side.settled} ${conditionOf(side).made}. This side has settled.`}
             </p>
           ) : (
             <>
@@ -231,9 +230,7 @@ async function MarketContent({
                           variant="link"
                           size="sm"
                           nativeButton={false}
-                          render={
-                            <Link href={txUrl(step.hash)} />
-                          }
+                          render={<Link href={txUrl(step.hash)} />}
                         >
                           Transaction
                         </Button>

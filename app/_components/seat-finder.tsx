@@ -10,7 +10,13 @@ import { OwnershipBar, type Share } from "./ownership-bar";
 import { SectionSeats } from "./section-seats";
 import { StadiumMap, type SectionInfo } from "./stadium-map";
 
-export type FinderSide = { id: string; name: string; shares: Share[] };
+export type FinderSide = {
+  id: string;
+  name: string;
+  /** Who the side's seats are for: "the AFC team that makes the final". */
+  fans: string;
+  shares: Share[];
+};
 export type FinderSeat = {
   id: string;
   side: string;
@@ -67,7 +73,7 @@ export function SeatFinder({
                   >
                     <span className="text-sm font-medium">{side.name}</span>
                     <span className="text-sm text-fg-2">
-                      {`For fans of the ${side.name.replace(/ side$/, "")} team that makes the final`}
+                      {`For fans of ${side.fans}`}
                     </span>
                   </div>
                 ),

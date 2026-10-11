@@ -9,13 +9,14 @@ const LEDGER_LAG_MS = 8_000;
 /** A deadline further off than this is not worth a timer: the page will be loaded again by then. */
 const WATCH_MS = 3_600_000;
 
-// Takes back a payment that was never released. It shows only once the payment's deadline has
-// passed, and appears by itself when that happens while the page is open.
+// Takes back a payment that was never released, in exchange for the ticket. It shows only once the
+// payment's deadline has passed, and appears by itself when that happens while the page is open.
 export function RefundButton({
   nftId,
   after,
   ready,
   size,
+  leave,
 }: {
   nftId: string;
   /** When the payment can be taken back, as an ISO time. */
@@ -23,6 +24,8 @@ export function RefundButton({
   /** The deadline had already passed when the page was made. */
   ready: boolean;
   size?: "sm";
+  /** Go to the list of tickets afterwards. Set on a ticket's own page, which the refund removes. */
+  leave?: boolean;
 }) {
   const [reached, setReached] = useState(false);
   const [pending, start] = useTransition();
@@ -47,7 +50,7 @@ export function RefundButton({
           onClick={() =>
             start(async () => {
               setError(null);
-              const result = await takeRefund(nftId);
+              const result = await takeRefund(nftId, leave);
               if (result?.error) setError(result.error);
             })
           }

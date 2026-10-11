@@ -6,6 +6,7 @@ import { Card } from "@/components/lime/ui/card";
 import { formatAmount } from "@/components/lime/ui/amount";
 import { Icon, ArrowLeft } from "@/components/lime/icon";
 import {
+  conditionOf,
   feeFor,
   formatDate,
   getSeat,
@@ -57,6 +58,7 @@ async function ReviewPageContent({
   if (!event || !seat || !config) notFound();
   const side = await loadSide(config);
   const outcome = side.onSale.find((item) => item.slug === team);
+  const condition = conditionOf(side);
   if (!outcome) notFound();
 
   // A ticket that was already sold can only be bought from its holder, at the price they listed.
@@ -118,7 +120,10 @@ async function ReviewPageContent({
             </div>
           )}
           <dl className="flex flex-col gap-2 text-sm">
-            <Row label="Ticket" value={`If ${outcome.team} make the final`} />
+            <Row
+              label="Ticket"
+              value={`If ${outcome.team} ${condition.make}`}
+            />
             <Row
               label="Event"
               value={`${event.title}, ${formatDate(event.date)}`}
@@ -166,10 +171,10 @@ async function ReviewPageContent({
           </dl>
           <p className="text-sm leading-normal text-fg-2">
             {many
-              ? `If ${outcome.team} do not make the final, these tickets expire and are not refunded. You can resell each one at any time before then. You pay for all ${count} at once: you get every ticket or none.`
-              : `If ${outcome.team} do not make the final, this ticket expires and is not refunded. You can resell it at any time before then.`}
+              ? `If ${outcome.team} do not ${condition.make}, these tickets expire and are not refunded. You can resell each one at any time before then. You pay for all ${count} at once: you get every ticket or none.`
+              : `If ${outcome.team} do not ${condition.make}, this ticket expires and is not refunded. You can resell it at any time before then.`}
             {resale === null &&
-              " Your payment is held in escrow on the XRP Ledger and released to the organizer once the finalists are decided."}
+              ` Your payment is held in escrow on the XRP Ledger and released to the organizer once ${condition.decided}.`}
           </p>
           <p className="text-sm leading-normal text-fg-2">
             {`One wallet can hold up to ${TICKET_LIMIT} ${outcome.team} tickets for this event.`}

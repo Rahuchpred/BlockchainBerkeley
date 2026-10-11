@@ -1,4 +1,5 @@
 import Form from "next/form";
+import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { Button } from "@/components/lime/ui/button";
@@ -10,12 +11,13 @@ import {
 } from "@/components/lime/ui/field";
 import { Input } from "@/components/lime/ui/input";
 import { Status, type StatusName } from "@/components/lime/ui/status";
-import { formatDate, seatLabel } from "@/lib/fairseat/data";
+import { conditionOf, formatDate, seatLabel } from "@/lib/fairseat/data";
 import { findEvent } from "@/lib/fairseat/events";
 import { viewTicket, type TicketView } from "@/lib/fairseat/live";
-import { activityFor, holderOf } from "@/lib/fairseat/store";
+import { activityFor, holderOf, type Activity } from "@/lib/fairseat/store";
 import { shortAddress } from "@/lib/fairseat/story";
-import { findTicket, explorerTicketUrl } from "@/lib/fairseat/xrpl";
+import { accountUrl, findTicket } from "@/lib/fairseat/xrpl";
+import { LedgerTrail } from "../_components/ledger-trail";
 import { PageSkeleton } from "../_components/page-skeleton";
 import { TeamMark } from "../_components/team-mark";
 
@@ -36,6 +38,14 @@ const refuse = (why: string, nftId?: string): Verdict => ({
   nftId,
 });
 
+/** How to say a burned ticket's team is out, from the side its seat was on. */
+function missedWords(step: Activity) {
+  const event = findEvent(step.eventId);
+  const seat = event?.seats.find((item) => item.id === step.seatId);
+  return conditionOf(event?.sides.find((side) => side.id === seat?.side))
+    .missed;
+}
+
 /** Asks the ledger whether the holder of this ticket code gets in. */
 async function judge(code: string): Promise<Verdict> {
   // A scanned pass reads fairseat:<id>. A typed code is the id alone.
@@ -51,11 +61,13 @@ async function judge(code: string): Promise<Verdict> {
   if (!found.found) {
     if (found.reason === "not-ours")
       return refuse("This was not minted by the Fairseat organizer.", nftId);
-    const burned = activityFor(nftId).some((step) => step.kind === "burned");
+    const burned = activityFor(nftId).find((step) => step.kind === "burned");
     return refuse(
-      burned
-        ? "This ticket was burned when its team missed the final."
-        : "No ticket with this code was found on the ledger.",
+      !burned
+        ? "No ticket with this code was found on the ledger."
+        : burned.returned
+          ? "This ticket was burned when its payment was taken back."
+          : `This ticket was burned when its team ${missedWords(burned)}.`,
       nftId,
     );
   }
@@ -75,26 +87,31 @@ async function judge(code: string): Promise<Verdict> {
     return refuse("This ticket is for an event that is not on sale.", nftId);
 
   const { team } = view.outcome;
+  const condition = conditionOf(view.side);
   const rest = { nftId, view, holder };
   if (view.status === "live")
     return {
       ...rest,
       status: "done",
       label: "Let them in",
-      why: `${team} made the final, so this ticket is the seat.`,
+      why: `${team} ${condition.made}, so this ticket is the seat.`,
     };
   if (view.status === "open")
     return {
       ...rest,
       status: "queued",
       label: "Not yet",
-      why: `The final is not decided. This ticket becomes the seat only if ${team} make it.`,
+      why: view.side.condition
+        ? `This is not decided yet. This ticket becomes the seat only if ${team} ${condition.make}.`
+        : `The final is not decided. This ticket becomes the seat only if ${team} make it.`,
     };
-  return { ...refuse(`${team} missed the final.`), ...rest };
+  return { ...refuse(`${team} ${condition.missed}.`), ...rest };
 }
 
 function Result({ verdict }: { verdict: Verdict }) {
   const { view, holder, nftId } = verdict;
+  // The steps Fairseat recorded for this ticket, each with its proof. Empty for a code it never saw.
+  const steps = nftId ? activityFor(nftId) : [];
   return (
     <Card variant="outline">
       <div className="flex flex-col gap-1">
@@ -125,17 +142,21 @@ function Result({ verdict }: { verdict: Verdict }) {
           <span className="font-mono">{shortAddress(holder)}</span>
         </div>
       )}
-      {nftId && (
+      {holder && (
         <Button
           variant="outline"
           size="sm"
           nativeButton={false}
-          render={
-            <a href={explorerTicketUrl(nftId)} target="_blank" rel="noreferrer" />
-          }
+          render={<Link href={accountUrl(holder)} />}
         >
-          View the ticket on the ledger
+          View the holder on the ledger
         </Button>
+      )}
+      {steps.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-base font-medium">This ticket on the ledger</h2>
+          <LedgerTrail steps={steps} />
+        </section>
       )}
     </Card>
   );

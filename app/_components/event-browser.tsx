@@ -18,6 +18,8 @@ export type EventSummary = {
   from: number | null;
   /** What decides the seat, when it is not a place in the event's own final. */
   note?: string;
+  /** What the card says once no ticket is on sale: "Finalists decided". */
+  decided: string;
 };
 
 const SPORTS = ["All", "Football", "Baseball", "Soccer"];
@@ -71,7 +73,7 @@ export function EventBrowser({ events }: { events: EventSummary[] }) {
               )}
               <p className="text-sm text-fg-2">
                 {event.from === null
-                  ? "Finalists decided"
+                  ? event.decided
                   : `From ${formatAmount(event.from)}`}
               </p>
             </Card>

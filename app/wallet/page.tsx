@@ -64,7 +64,10 @@ function line(step: Activity, me: string): { what: string; change: number } {
     case "refunded":
       return { what: "Took a payment back from escrow", change: amount };
     case "burned":
-      return { what: "Ticket expired", change: 0 };
+      return {
+        what: step.returned ? "Ticket handed back" : "Ticket expired",
+        change: 0,
+      };
     default:
       return { what: "Ticket created", change: 0 };
   }
@@ -149,9 +152,7 @@ async function WalletContent() {
         <Button
           variant="outline"
           nativeButton={false}
-          render={
-            <Link href={accountUrl(wallet.address)} />
-          }
+          render={<Link href={accountUrl(wallet.address)} />}
         >
           View the account on the ledger
         </Button>
@@ -258,9 +259,7 @@ async function WalletContent() {
                           variant="link"
                           size="sm"
                           nativeButton={false}
-                          render={
-                            <Link href={txUrl(step.hash)} />
-                          }
+                          render={<Link href={txUrl(step.hash)} />}
                         >
                           Transaction
                         </Button>

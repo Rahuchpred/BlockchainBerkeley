@@ -162,23 +162,50 @@ export const soldTickets = () =>
 export const ledgerSettlement = (ticker: string) =>
   market().settled?.[ticker] ?? null;
 
-/** Records that a market was settled on the ledger: its escrows are released and its losing tickets are gone. */
-export function recordSettlement(
-  ticker: string,
-  hashes: string[],
-  released: string[],
-  burned: string[],
-) {
+/**
+ * Records what a settlement really did on the ledger: these payments are no longer in escrow and
+ * these tickets are gone. Anything left out stays as it was, so the settlement can be run again.
+ */
+export function recordSettled(released: string[], burned: string[]) {
   const state = market();
   const escrows = { ...state.escrows };
   for (const nftId of released) delete escrows[nftId];
   const offers = { ...state.offers };
   for (const nftId of burned) delete offers[nftId];
+  write("market.json", { ...state, escrows, offers });
+}
+
+/** Records that a market is settled on the ledger in full, with the transactions that did it. */
+export function recordSettlement(ticker: string, hashes: string[]) {
+  const state = market();
   write("market.json", {
     ...state,
-    escrows,
-    offers,
     settled: { ...state.settled, [ticker]: hashes },
+  });
+}
+
+/**
+ * Forgets a ticket that was refunded and burned: its sale, its escrow, its holder and any open
+ * offer. The seat's ticket for that team can then be sold again.
+ */
+export function forgetTicket(nftId: string) {
+  const sold = read<Sold>("sold.json", {});
+  write(
+    "sold.json",
+    Object.fromEntries(Object.entries(sold).filter(([, id]) => id !== nftId)),
+  );
+  const state = market();
+  const without = <T>(items: Record<string, T> | undefined) => {
+    const kept = { ...items };
+    delete kept[nftId];
+    return kept;
+  };
+  write("market.json", {
+    ...state,
+    offers: without(state.offers),
+    paid: without(state.paid),
+    escrows: without(state.escrows),
+    holders: without(state.holders),
   });
 }
 
@@ -209,6 +236,8 @@ export type Activity = {
   from?: string;
   /** The account that received. */
   to?: string;
+  /** On a burn: the fan took the payment back, so the ticket was handed back, not expired. */
+  returned?: boolean;
 };
 
 /** Every recorded step, oldest first. */

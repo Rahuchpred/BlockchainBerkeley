@@ -11,6 +11,8 @@ import {
 import { Icon, ArrowLeft } from "@/components/lime/icon";
 import {
   EVENTS,
+  conditionOf,
+  fansOf,
   formatDate,
   getSeat,
   getSide,
@@ -97,7 +99,7 @@ async function SeatPageContent({
               {event.venue}.
             </p>
             <p className="max-w-xl text-sm leading-normal text-fg-2">
-              {`This seat is on the ${side.name}, so it goes to a fan of the ${side.name.replace(/ side$/, "")} team that makes the final. Seats on the other half follow a different race.`}
+              {`This seat is on the ${side.name}, so it goes to a fan of ${fansOf(side)}.${event.sides.length > 1 ? " Seats on the other half follow a different race." : ""}`}
             </p>
           </div>
         </header>
@@ -105,7 +107,7 @@ async function SeatPageContent({
           <Empty>
             <EmptyTitle>
               {side.settled
-                ? `${side.settled} made the final`
+                ? `${side.settled} ${conditionOf(side).made}`
                 : "No tickets on sale yet"}
             </EmptyTitle>
             <EmptyDescription>
@@ -128,6 +130,7 @@ async function SeatPageContent({
             market={side.market}
             buyBase={`/events/${event.id}/seats/${seat.id}/buy`}
             faceValue={seat.faceValue}
+            condition={conditionOf(side)}
             teams={teams}
           />
         )}

@@ -7,6 +7,7 @@ import { Button } from "@/components/lime/ui/button";
 import { formatAmount } from "@/components/lime/ui/amount";
 import { Icon, Renew } from "@/components/lime/icon";
 import { cn } from "@/lib/lime/utils";
+import type { Condition } from "@/lib/fairseat/data";
 import type { TicketStatus } from "@/lib/fairseat/live";
 import type { QrShape } from "@/lib/fairseat/qr";
 import { QrCode } from "./qr-code";
@@ -84,12 +85,13 @@ function Money({
 }
 
 // The ticket drawn as a ticket: the team's color on top, the seat in large numbers, then a stub that
-// tears off along a perforated line. Once the team makes the final the stub carries the code a fan
+// tears off along a perforated line. Once the team is through the stub carries the code a fan
 // shows at the gate. The back holds the money and the ticket's place on the ledger.
 export function TicketPass({
   id,
   href,
   team,
+  condition,
   image,
   tone,
   event,
@@ -111,6 +113,8 @@ export function TicketPass({
   /** Where anyone can look the ticket up. */
   href: string;
   team: string;
+  /** What the team must do for the ticket to become the seat. */
+  condition: Condition;
   image: string | null;
   tone: number;
   event: string;
@@ -157,7 +161,7 @@ export function TicketPass({
               <TeamMark image={image} team={team} size="lg" />
               <div className="flex min-w-0 flex-1 flex-col gap-1">
                 <p className="truncate text-lg leading-snug font-semibold">
-                  {`If ${team} make the final`}
+                  {`If ${team} ${condition.make}`}
                 </p>
                 <p className="truncate text-sm text-fg-2">{`${event}, ${when}`}</p>
                 <p className="truncate text-sm text-fg-2">{place}</p>
@@ -192,7 +196,7 @@ export function TicketPass({
                   className="size-32 shrink-0 rounded-md"
                 />
                 <p className="text-sm leading-normal text-fg-2">
-                  {`${team} made the final, so this ticket is the seat. Show this code at the gate.`}
+                  {`${team} ${condition.made}, so this ticket is the seat. Show this code at the gate.`}
                 </p>
               </div>
             ) : (
@@ -239,10 +243,10 @@ export function TicketPass({
               </p>
               <p className="text-sm leading-normal text-fg-2">
                 {status === "open"
-                  ? `It becomes ${seatName} if ${team} make the final, and expires if they do not.`
+                  ? `It becomes ${seatName} if ${team} ${condition.make}, and expires if they do not.`
                   : status === "live"
-                    ? `${team} made the final, so this ticket is ${seatName}.`
-                    : `${team} did not make the final, so this ticket has expired.`}
+                    ? `${team} ${condition.made}, so this ticket is ${seatName}.`
+                    : `${team} did not ${condition.make}, so this ticket has expired.`}
               </p>
               <dl className="flex flex-col gap-2 text-sm">
                 <Money

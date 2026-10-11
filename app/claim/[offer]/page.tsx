@@ -2,7 +2,7 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { Card, CardDescription, CardTitle } from "@/components/lime/ui/card";
-import { formatDate, seatLabel } from "@/lib/fairseat/data";
+import { conditionOf, formatDate, seatLabel } from "@/lib/fairseat/data";
 import { findEvent } from "@/lib/fairseat/events";
 import { viewTicket } from "@/lib/fairseat/live";
 import { findOffer } from "@/lib/fairseat/store";
@@ -31,6 +31,7 @@ async function ClaimPageContent({
   if (!view) notFound();
   const hasWallet = (await readWallet()) !== null;
   const { event, seat, outcome } = view;
+  const condition = conditionOf(view.side);
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-col gap-4 px-4 pt-4 pb-8 sm:px-6 sm:pt-8">
@@ -39,7 +40,7 @@ async function ClaimPageContent({
         <div className="flex items-center gap-3">
           <TeamMark image={outcome.image} team={outcome.team} size="lg" />
           <div className="flex min-w-0 flex-col gap-1">
-            <CardTitle>{`If ${outcome.team} make the final`}</CardTitle>
+            <CardTitle>{`If ${outcome.team} ${condition.make}`}</CardTitle>
             <CardDescription>
               {event.title}, {formatDate(event.date)}
             </CardDescription>
@@ -49,8 +50,7 @@ async function ClaimPageContent({
           </div>
         </div>
         <p className="text-sm leading-normal text-fg-2">
-          A friend sent you this ticket. It becomes the seat if {outcome.team}{" "}
-          make the final, and expires if they do not.
+          {`A friend sent you this ticket. It becomes the seat if ${outcome.team} ${condition.make}, and expires if they do not.`}
         </p>
         <ClaimButton offerId={offerId} hasWallet={hasWallet} />
       </Card>

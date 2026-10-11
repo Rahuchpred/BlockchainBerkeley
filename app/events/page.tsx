@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { formatDate, placeOf } from "@/lib/fairseat/data";
+import { conditionOf, formatDate, placeOf } from "@/lib/fairseat/data";
 import { allEvents } from "@/lib/fairseat/events";
 import { fromPrice, loadSides, loadWatched } from "@/lib/fairseat/live";
 import { EventBrowser } from "../_components/event-browser";
@@ -25,7 +25,13 @@ async function Events() {
           .map((outcome) => ({ team: outcome.team, image: outcome.image })),
         shares: sides[0]?.onSale ?? [],
         from: fromPrice(event, sides),
-        note: event.note,
+        // Said only when the seat is not decided by a place in this event's own final.
+        note: event.sides[0]?.condition
+          ? `Yours if your team ${event.sides[0].condition.makes}`
+          : undefined,
+        decided: event.sides[0]?.condition
+          ? conditionOf(event.sides[0]).decided.replace(/^t/, "T")
+          : "Finalists decided",
       };
     }),
   );

@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { Button } from "@/components/lime/ui/button";
 import { formatAmount } from "@/components/lime/ui/amount";
 import { Icon, ArrowLeft } from "@/components/lime/icon";
-import { formatDate, percent, placeOf } from "@/lib/fairseat/data";
+import { conditionOf, formatDate, percent, placeOf } from "@/lib/fairseat/data";
 import { findEvent } from "@/lib/fairseat/events";
 import { getHistory } from "@/lib/fairseat/gemini";
 import { viewTicket } from "@/lib/fairseat/live";
@@ -62,6 +62,7 @@ async function TicketPageContent({
   const offer = open ? { offerId: open.offerId, price: open.price } : null;
 
   const { event, seat, outcome, status, worth } = view;
+  const condition = conditionOf(view.side);
   // A locked payment can be taken back once its deadline passes, if it was never released.
   const now = new Date();
   const refundAfter = locked && refundAfterFor(locked, event.date);
@@ -104,9 +105,7 @@ async function TicketPageContent({
               variant="outline"
               size="sm"
               nativeButton={false}
-              render={
-                <Link href={txUrl(receipt)} />
-              }
+              render={<Link href={txUrl(receipt)} />}
             >
               View the transaction
             </Button>
@@ -120,6 +119,7 @@ async function TicketPageContent({
             id={ticket.id}
             href={ticketUrl(ticket.id)}
             team={outcome.team}
+            condition={condition}
             image={outcome.image}
             tone={outcome.tone}
             event={event.title}
@@ -140,19 +140,20 @@ async function TicketPageContent({
           />
           {status === "expired" && (
             <p className="text-sm leading-normal text-fg-2">
-              {outcome.team} did not make the final, so this ticket has expired.
+              {`${outcome.team} did not ${condition.make}, so this ticket has expired.`}
             </p>
           )}
           {locked && refundAfter && (
             <section className="flex flex-col gap-3">
               <h2 className="text-lg font-semibold">Your payment</h2>
               <p className="max-w-xl text-sm leading-normal text-fg-2">
-                {`${formatAmount(locked.amount)} is held in escrow until the finalists are decided. If it is never released, you can take it back from ${formatDeadline(refundAfter, now)}.`}
+                {`${formatAmount(locked.amount)} is held in escrow until ${condition.decided}. If it is never released, you can take it back from ${formatDeadline(refundAfter, now)}. Taking it back gives up the ticket.`}
               </p>
               <RefundButton
                 nftId={ticket.id}
                 after={refundAfter.toISOString()}
                 ready={now >= refundAfter}
+                leave
               />
             </section>
           )}
@@ -180,7 +181,7 @@ async function TicketPageContent({
               </div>
               <OddsChart
                 tone={outcome.tone}
-                label={`${outcome.team}'s chance of making the final`}
+                label={`${outcome.team}'s chance of ${condition.making}`}
                 ranges={ranges}
               />
             </section>
