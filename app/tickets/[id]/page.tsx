@@ -16,7 +16,7 @@ import {
   offerFor,
   paidFor,
 } from "@/lib/fairseat/store";
-import { RESALE_RATE, listTickets, txUrl } from "@/lib/fairseat/xrpl";
+import { RESALE_RATE, listTickets, ticketUrl, txUrl } from "@/lib/fairseat/xrpl";
 import { Status } from "@/components/lime/ui/status";
 import { qrShape } from "@/lib/fairseat/qr";
 import { OddsChart } from "../../_components/odds-chart";
@@ -107,6 +107,8 @@ async function TicketPageContent({
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="flex flex-col gap-6">
           <TicketPass
+            id={ticket.id}
+            href={ticketUrl(ticket.id)}
             team={outcome.team}
             image={outcome.image}
             tone={outcome.tone}
@@ -117,13 +119,14 @@ async function TicketPageContent({
             row={seat.row}
             seat={seat.seat}
             status={status}
+            faceValue={seat.faceValue}
             paid={ticket.paid}
             worth={worth}
             locked={locked?.amount ?? null}
+            cut={RESALE_RATE}
             qr={
               status === "live" ? qrShape(`fairseat:${ticket.id}`) : undefined
             }
-            code={`${ticket.id.slice(0, 8)}...${ticket.id.slice(-8)}`}
           />
           {status === "expired" && (
             <p className="text-sm leading-normal text-fg-2">

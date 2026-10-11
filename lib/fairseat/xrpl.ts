@@ -43,6 +43,7 @@ const RIPPLE_EPOCH = 946684800;
 export const txUrl = (hash: string) => `${EXPLORER}/transactions/${hash}`;
 export const accountUrl = (address: string) =>
   `${EXPLORER}/accounts/${address}`;
+export const ticketUrl = (nftId: string) => `${EXPLORER}/nft/${nftId}`;
 
 // One connection is kept open and shared. Opening a new one for every read gets the app turned
 // away by the public testnet server after a few page loads.
