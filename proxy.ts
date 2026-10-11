@@ -5,8 +5,9 @@ import { NextResponse, type NextRequest } from "next/server";
 //
 // - Nobody logged in: everything leads to the login page.
 // - The buyer: every page except the organizer side.
-// - A club's organizer: the club desk only.
-// - The house organizer: the organizer side except the club desk.
+// - A club's organizer: the club desk, and the events to see its tickets on sale.
+// - The house organizer: the organizer side except the club desk, and the events.
+// Only the buyer can buy: the actions in app/actions.ts check that themselves.
 // The landing page, the proof pages, the gate check and the demo controls stand outside the
 // accounts and are open to everyone, logged in or not.
 export function proxy(request: NextRequest) {
@@ -22,16 +23,17 @@ export function proxy(request: NextRequest) {
     pathname.startsWith("/proof/");
   if (open) return NextResponse.next();
   const desk = pathname.startsWith("/organizer/nba");
+  const browsing = pathname === "/events" || pathname.startsWith("/events/");
   if (account === "buyer")
     return pathname.startsWith("/organizer")
       ? go("/events")
       : NextResponse.next();
   if (account === "house")
-    return pathname.startsWith("/organizer") && !desk
+    return browsing || (pathname.startsWith("/organizer") && !desk)
       ? NextResponse.next()
       : go("/organizer");
   if (account?.startsWith("team:"))
-    return desk ? NextResponse.next() : go("/organizer/nba");
+    return desk || browsing ? NextResponse.next() : go("/organizer/nba");
   return go("/login");
 }
 

@@ -51,8 +51,13 @@ const REFRESH_MS = 15_000;
 export function LiveRefresh({ every = REFRESH_MS }: { every?: number }) {
   const router = useRouter();
   useEffect(() => {
+    let last = Date.now();
     const refresh = () => {
-      if (document.visibilityState === "visible") router.refresh();
+      // A tab that flickers in and out of view must not ask again and again.
+      if (document.visibilityState !== "visible" || Date.now() - last < 5000)
+        return;
+      last = Date.now();
+      router.refresh();
     };
     const timer = setInterval(refresh, every);
     // A tab that was away catches up the moment it is looked at again.

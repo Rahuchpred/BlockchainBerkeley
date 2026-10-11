@@ -10,10 +10,11 @@ import { logOut } from "../actions";
 import { Logo } from "./logo";
 import { WalletChip } from "./wallet-chip";
 
-// What each kind of account is called beside its name, and the pages it can open.
+// What each kind of account is called beside its name, and the pages it can open. The bar keeps one
+// shape whoever is logged in: the events everyone can browse, then the account's own place.
 const ACCOUNTS: Record<
   Session["kind"],
-  { role: string; links: { href: string; label: string; wide?: boolean }[] }
+  { role: string; links: { href: string; label: string }[] }
 > = {
   buyer: {
     role: "Buyer",
@@ -25,13 +26,16 @@ const ACCOUNTS: Record<
   // A club is the organizer of its own tickets, so it is called by what it is.
   team: {
     role: "Club",
-    links: [{ href: "/organizer/nba", label: "Club desk", wide: true }],
+    links: [
+      { href: "/events", label: "Events" },
+      { href: "/organizer/nba", label: "Club desk" },
+    ],
   },
   house: {
     role: "Organizer",
     links: [
+      { href: "/events", label: "Events" },
       { href: "/organizer", label: "Dashboard" },
-      { href: "/organizer/new", label: "List an event", wide: true },
     ],
   },
 };
@@ -117,7 +121,6 @@ async function Account() {
             key={link.href}
             variant="ghost"
             size="sm"
-            className={link.wide ? "hidden sm:inline-flex" : undefined}
             nativeButton={false}
             render={<Link href={link.href} />}
           >

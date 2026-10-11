@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { NBA_CODES, slug } from "./data";
 import {
   Client,
   Wallet,
@@ -121,6 +122,12 @@ function teamOrganizer(team: string) {
 
 export const teamOrganizerAddress = (team: string) =>
   teamOrganizer(team).address;
+
+/** The wallet of every club that sells its own tickets. */
+const clubAddresses = () =>
+  new Set(
+    Object.keys(NBA_CODES).map((name) => teamOrganizerAddress(slug(name))),
+  );
 
 /**
  * The lock on a ticket's escrow and the key that opens it. Only Fairseat can work out the key, so
@@ -1065,7 +1072,14 @@ export function findTicket(
           (item) => item.NFTokenID === nftId,
         );
         if (nft) {
-          const record = makers.includes(nft.Issuer) ? decode(nft.URI) : null;
+          // A ticket a club released was minted by that club's own wallet.
+          const read = decode(nft.URI);
+          const record =
+            read &&
+            (makers.includes(nft.Issuer) ||
+              nft.Issuer === teamOrganizerAddress(read.team))
+              ? read
+              : null;
           return record
             ? { found: true, ticket: { ...record, nftId, holder: account } }
             : { found: false, reason: "not-ours" };
@@ -1077,7 +1091,10 @@ export function findTicket(
     const maker = encodeAccountID(Buffer.from(nftId.slice(8, 48), "hex"));
     return {
       found: false,
-      reason: makers.includes(maker) ? "gone" : "not-ours",
+      reason:
+        makers.includes(maker) || clubAddresses().has(maker)
+          ? "gone"
+          : "not-ours",
     };
   });
 }

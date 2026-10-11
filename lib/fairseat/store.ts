@@ -2,16 +2,33 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { FairEvent } from "./data";
+import { readShared, shared, writeShared } from "./shared-store";
 
 // The small amount of state Fairseat keeps beside the ledger. The ledger holds the tickets and the
-// offers themselves; these files only make them quick to look up without scanning every account.
-// On Vercel the project folder cannot be written to, so the files go in the temporary folder. That
-// folder lasts only as long as the running instance does: fine for a demo, not for keeping.
+// offers themselves; this only makes them quick to look up without scanning every account.
+//
+// With a shared database set up (see shared-store.ts) the state lives there, which is what a hosted
+// copy needs: on Vercel each page runs on its own and would not see another page's files. Without
+// one it is kept in files, in the project folder or, on Vercel, the temporary folder.
 const DIR = process.env.VERCEL
   ? join(tmpdir(), "fairseat-data")
   : join(process.cwd(), ".data");
 
+/** Every piece of state, by name. The shared database is asked for all of them in one request. */
+const NAMES = [
+  "sold.json",
+  "released.json",
+  "market.json",
+  "events.json",
+  "activity.json",
+];
+
 function read<T>(name: string, empty: T): T {
+  if (shared) {
+    // A failure is not treated as empty: the next write would then save over what is there.
+    const text = readShared(NAMES, name);
+    return text === null ? empty : (JSON.parse(text) as T);
+  }
   const file = join(DIR, name);
   try {
     return existsSync(file)
@@ -23,6 +40,7 @@ function read<T>(name: string, empty: T): T {
 }
 
 function write(name: string, value: unknown) {
+  if (shared) return writeShared(name, JSON.stringify(value));
   mkdirSync(DIR, { recursive: true });
   writeFileSync(join(DIR, name), JSON.stringify(value, null, 2));
 }
