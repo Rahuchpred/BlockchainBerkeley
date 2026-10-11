@@ -48,29 +48,34 @@ export function OwnershipBar({
           />
         )}
       </div>
-      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-fg-2">
-        {listed.map((item) => (
-          <li key={item.team} className="flex items-center gap-2">
-            <span
-              aria-hidden="true"
-              className="size-2 shrink-0 rounded-full bg-(--tone)"
-              style={
-                { "--tone": `var(--team-${item.tone})` } as React.CSSProperties
-              }
-            />
-            {item.team} {percent(item.share)}
-          </li>
-        ))}
-        {unlisted > 0 && (
-          <li className="flex items-center gap-2">
-            <span
-              aria-hidden="true"
-              className="size-2 shrink-0 rounded-full bg-(--team-0)"
-            />
-            {unlisted} more {percent(unlistedShare)}
-          </li>
-        )}
-      </ul>
+      {/* A legend of 0 leaves just the bar, for places that list the teams themselves. */}
+      {legend > 0 && (
+        <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-fg-2">
+          {listed.map((item) => (
+            <li key={item.team} className="flex items-center gap-2">
+              <span
+                aria-hidden="true"
+                className="size-2 shrink-0 rounded-full bg-(--tone)"
+                style={
+                  {
+                    "--tone": `var(--team-${item.tone})`,
+                  } as React.CSSProperties
+                }
+              />
+              {item.team} {percent(item.share)}
+            </li>
+          ))}
+          {unlisted > 0 && (
+            <li className="flex items-center gap-2">
+              <span
+                aria-hidden="true"
+                className="size-2 shrink-0 rounded-full bg-(--team-0)"
+              />
+              {unlisted} more {percent(unlistedShare)}
+            </li>
+          )}
+        </ul>
+      )}
     </div>
   );
 }

@@ -16,7 +16,12 @@ import {
   offerFor,
   paidFor,
 } from "@/lib/fairseat/store";
-import { RESALE_RATE, listTickets, ticketUrl, txUrl } from "@/lib/fairseat/xrpl";
+import {
+  RESALE_RATE,
+  listTickets,
+  ticketUrl,
+  txUrl,
+} from "@/lib/fairseat/xrpl";
 import { Status } from "@/components/lime/ui/status";
 import { qrShape } from "@/lib/fairseat/qr";
 import { OddsChart } from "../../_components/odds-chart";

@@ -113,7 +113,8 @@ Open http://localhost:3000.
 
 | Page | What it is |
 | ---- | ---------- |
-| `/` | Events, with live odds |
+| `/` | Home, with a live preview of one event |
+| `/events` | Events, with live odds |
 | `/events/[id]` | Stadium map and seats |
 | `/events/[id]/seats/[seat]` | One ticket per team, with live prices and resales |
 | `/tickets` | The tickets in your wallet, read from the ledger |

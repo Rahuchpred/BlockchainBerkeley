@@ -25,7 +25,7 @@ export function SiteHeader() {
       <div className="mx-auto flex h-14 w-full max-w-5xl items-center gap-2 px-4 sm:px-6">
         <Link
           href="/"
-          aria-label="Fairseat, all events"
+          aria-label="Fairseat, home"
           className="flex items-center gap-2 rounded-sm text-base font-semibold text-fg"
         >
           <Logo className="size-6 shrink-0 text-accent" />
@@ -33,13 +33,11 @@ export function SiteHeader() {
           <span className="hidden sm:inline">Fairseat</span>
         </Link>
         <nav aria-label="Main" className="ms-auto flex items-center gap-1">
-          {/* On a phone the name already leads to the events, so this link gives up its room. */}
           <Button
             variant="ghost"
             size="sm"
-            className="hidden sm:inline-flex"
             nativeButton={false}
-            render={<Link href="/" />}
+            render={<Link href="/events" />}
           >
             Events
           </Button>
@@ -51,9 +49,11 @@ export function SiteHeader() {
           >
             Tickets
           </Button>
+          {/* On a phone the organizer page gives up its room. It is reached from the home page. */}
           <Button
             variant="ghost"
             size="sm"
+            className="hidden sm:inline-flex"
             nativeButton={false}
             render={<Link href="/organizer" />}
           >
